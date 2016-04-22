@@ -1,0 +1,114 @@
+
+    
+import java.io.*;
+import java.math.BigInteger;
+import java.net.*;
+import java.util.HashMap;
+
+import com.sun.net.httpserver.*;
+ 
+ 
+ 
+public class WebServer {
+ 
+    public static void main(String[] args) throws Exception {
+
+	System.out.println(InetAddress.getLocalHost().getHostAddress());
+
+        HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        server.createContext("/f.html", new MyHandler());
+        server.setExecutor(null); // creates a default executor
+        server.start();
+    }
+ 
+
+	 private static String printLines(String name,BigInteger numberToBeFactored,long id, InputStream ins) throws Exception {
+	   
+	    String line = null;
+	    String result ="";
+	    BufferedReader in = new BufferedReader(
+	        new InputStreamReader(ins));
+	    result=name + " " +in.readLine();
+	    
+
+	    try{
+	    	PrintWriter writer = new PrintWriter(new FileWriter("WebServerCode/instrumented/log/InstrumentationResults.log", true));
+	    	writer.println("--------------Number To be factored: "+numberToBeFactored.toString()+" -----------------");
+	    	writer.println("Thread id: "+id);
+
+	    	line = in.readLine();
+	    	while(line != null){
+	    		writer.println(line);
+	    		line = in.readLine();
+	    	}
+	    	writer.println("------------------------------------------------------");
+	    	writer.close();
+    	    }catch(Exception e){
+		System.out.println("An error occurred while writing the log!");
+	    }
+
+	    return result;
+	  }
+	 
+	 public static HashMap queryToMap(String query){
+ 	    HashMap result = new HashMap();
+ 	    String[] params = query.split("&");
+ 	    for (int i=0; i< params.length;i++) {
+ 	        String pair[] = params[i].split("=");
+ 	        if (pair.length>1) {
+ 	            result.put(pair[0], pair[1]);
+ 	        }else{
+ 	            result.put(pair[0], "");
+ 	        }
+ 	    }
+ 	    return result;
+ 	}
+
+    static class MyHandler implements HttpHandler {
+    	
+    	
+        
+    	public void handle(final HttpExchange exchange) throws IOException {
+ 
+        InputStream inpStream = exchange.getRequestBody();
+
+        Headers responseHeaders = exchange.getResponseHeaders();
+        responseHeaders.set("Content-Type", "text/html");
+        
+        new Thread(new Runnable(){
+			
+			//@Override
+			public void run() {
+				
+				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
+				
+				BigInteger numberToBeFactored= new  BigInteger(map.get("n").toString());
+
+				try{
+
+
+				    Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain "+ numberToBeFactored);
+				    //Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput MainIntFactorization "+ numberToBeFactored);
+
+				    pro.waitFor();
+
+
+			        String response = printLines("factorization result: ",numberToBeFactored,Thread.currentThread().getId(), pro.getInputStream());
+
+			        System.out.print(response+"\n");
+			        
+			
+			        exchange.sendResponseHeaders(200, response.length());
+			        OutputStream os = exchange.getResponseBody();
+			        os.write(response.getBytes());
+			        os.close();
+		        }catch(Exception e){}
+			        
+				
+			}
+		}).start();
+
+        }
+    }
+ 
+}

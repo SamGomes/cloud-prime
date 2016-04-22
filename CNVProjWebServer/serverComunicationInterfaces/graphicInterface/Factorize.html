@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>Factorization!</title>
+		<link rel="stylesheet" href="bootstrap.min.css"/>
+	</head>
+
+	<style type="text/css">
+		.centered{
+		    height: 200px;
+		    width: 400px;
+
+		    position: fixed;
+		    top: 50%;
+		    left: 50%;
+		    margin-top: -150px;
+		    margin-left:-550px;
+		}
+	</style>
+
+	<body   bgcolor="white">
+		<img style="position: absolute; left: 390px; top: 20px; width:500px; height:400px;" src="CloudPrime.png"  id="CloudPrime" />
+
+		<div style = "position: absolute; left: 370px; top: 450px;">
+			<img style="position: absolute; left: 0px; top: -50px; width:500px; height:100px;" src="formText.png"  id="CloudPrime" />
+			<input style="position: absolute; left: 0px; top: 30px; width:500px; height:20px;" type="text" id="numberToFactorize"/> <br/>
+			<form  id="loginForm" method="post" >
+			    <button class="btn btn-standard btn-log btn-xs" onclick="getNumber();"  id="factorizationButton"  style="  font:sans-serif; position: absolute; left: 0px; top: 80px; width:500px; height:80px;">Factorize</button/>
+			</form>
+		<div />
+	</body>
+</html>
+<script>
+	document.getElementById("factorizationButton").style.background='#C9EEFF';
+	function getNumber(){
+		//document.getElementById("loginForm").action="http://Proj-LB-681069110.us-west-2.elb.amazonaws.com/f.html?n="+document.getElementById("numberToFactorize").value;
+		document.getElementById("loginForm").action="http://localhost:8000/f.html?n="+document.getElementById("numberToFactorize").value;
+	}
+	
+</script>
+
