@@ -28,8 +28,11 @@ printf "This shell script compiles the Instrumentation Tool and Web Server code\
 
 	printf "Compiling...\n"
 
+	export CLASSPATH=./WebServerCode/instrumented/instrumentedOutput:./awsJavaSDK/lib/aws-java-sdk-1.10.69.jar:./awsJavaSDK/third-party/lib/*:.
 
- 	javac  -source 1.4  ./WebServerCode/instrumented/*.java -d ./WebServerCode/instrumented/output/
+
+
+ 	javac  -source 1.4 ./WebServerCode/instrumented/*.java -d ./WebServerCode/instrumented/output/
 
 	javac  -source 1.4 ./InstrumentationTool/FactInstr.java -d  ./WebServerCode/instrumented/instrumentedOutput/
 	#javac -source 1.4 ./WebServerCode/instrumented/WebServer.java ./WebServerCode/instrumented/FactorizeMain.java ./WebServerCode/instrumented/Factorize.java -d ./WebServerCode/instrumented/output/
@@ -63,5 +66,5 @@ trap "trap_ctrlc" 2
 
 
 
-java -cp ./awsJavaSDK/lib/aws-java-sdk-1.10.69.jar:./awsJavaSDK/third-party/lib/*:.:WebServerCode/instrumented/instrumentedOutput WebServer
+java WebServer
 

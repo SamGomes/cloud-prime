@@ -6,6 +6,7 @@ import java.net.*;
 import java.util.HashMap;
 
 import com.sun.net.httpserver.*;
+
  
 
 
@@ -15,17 +16,17 @@ public class WebServer {
 
 	private static String myIP;
 
- 	static DynamoDBGeneralOperations dbgo;
+ 	private static DynamoDBGeneralOperations dbgo;
 
 	public static void main(String[] args) throws Exception {
 	
-		dbgo = new DynamoDBGeneralOperations();
+		//dbgo = new DynamoDBGeneralOperations();
 
-		dbgo.init();
+		//dbgo.init();
 
 		myIP = InetAddress.getLocalHost().getHostAddress();
 		
-		dbgo.createTable("123.78.65.43", "date",new String[] {"numberToBeFactored","ThreadId","reCalcFactorsInfo"});
+		//dbgo.createTable("123.78.65.43", "date",new String[] {"numberToBeFactored","ThreadId","reCalcFactorsInfo"});
 
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
@@ -34,7 +35,7 @@ public class WebServer {
 	}
  
 
-	private static String printLines(String name,BigInteger numberToBeFactored,long id, InputStream ins) throws Exception {
+	private static String saveStats(String name,BigInteger numberToBeFactored,long id, InputStream ins) throws Exception {
 	   
 
 		
@@ -52,8 +53,8 @@ public class WebServer {
 //	    	 	line += in.readLine();
 //	    	 }
 //	    	 
-	    	 
-	 		dbgo.insertTuple("123.78.65.43",new String[] {"date","12345","numberToBeFactored",String.valueOf(numberToBeFactored),"ThreadId",String.valueOf(id),"reCalcFactorsInfo",line});
+	    	 System.out.println("line: "+line);
+	 		//dbgo.insertTuple("123.78.65.43",new String[] {"date","12345","numberToBeFactored",String.valueOf(numberToBeFactored),"ThreadId",String.valueOf(id),"reCalcFactorsInfo",line});
 
 	
 	    return result;
@@ -103,7 +104,7 @@ public class WebServer {
 				    pro.waitFor();
 
 
-			        String response = printLines("factorization result: ",numberToBeFactored,Thread.currentThread().getId(), pro.getInputStream());
+			        String response = saveStats("factorization result: ",numberToBeFactored,Thread.currentThread().getId(), pro.getInputStream());
 
 			        System.out.print(response+"\n");
 			        

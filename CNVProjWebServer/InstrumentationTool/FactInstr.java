@@ -54,8 +54,11 @@ public class FactInstr {
     		//System.out.println("found method in stack: "+pairs.getKey() + ", ocurred " + pairs.getValue()+" times.");
     		if(pairs.getKey().equals("recCalcFactors")){
     			System.out.println(pairs.getValue());
+                return;
     		}
+
     	}
+        System.out.println(0);
         //System.out.println("general results: "+i_count + " instructions in " + b_count + " basic blocks were executed in " + m_count + " methods.");
     }
     
