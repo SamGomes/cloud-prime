@@ -8,7 +8,9 @@ import java.util.HashMap;
 import com.sun.net.httpserver.*;
 
  
-
+import java.util.Date;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 
 
 public class WebServer {
@@ -20,14 +22,14 @@ public class WebServer {
 
 	public static void main(String[] args) throws Exception {
 	
-		dbgo = new DynamoDBGeneralOperations();
+		// dbgo = new DynamoDBGeneralOperations();
 
 
-		dbgo.init();
+		// dbgo.init();
 
 		myIP = InetAddress.getLocalHost().getHostAddress();
 		
-		dbgo.createTable("123.78.65.43", "date",new String[] {"numberToBeFactored","ThreadId","reCalcFactorsInfo"});
+		// dbgo.createTable("123.78.65.43", "date",new String[] {"numberToBeFactored","ThreadId","reCalcFactorsInfo"});
 
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
@@ -47,15 +49,17 @@ public class WebServer {
 	        new InputStreamReader(ins));
 	    result=name + " " +in.readLine();
 	    
-  
+	    DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+		Date date = new Date();
+		String formatedDate = dateFormat.format(date);
 	
-	    	 line = in.readLine();
-//	    	 while(line != null){
-//	    	 	line += in.readLine();
-//	    	 }
-//	    	 
-	    	System.out.println("line: "+line);
-	 		dbgo.insertTuple("123.78.65.43",new String[] {"date","12345","numberToBeFactored",String.valueOf(numberToBeFactored),"ThreadId",String.valueOf(id),"reCalcFactorsInfo",line});
+    	line = in.readLine();
+		// while(line != null){
+		// 	line += in.readLine();
+		// }
+	 
+		System.out.println("date: "+formatedDate);
+		// dbgo.insertTuple("123.78.65.43",new String[] {formatedDate,"12345","numberToBeFactored",String.valueOf(numberToBeFactored),"ThreadId",String.valueOf(id),"reCalcFactorsInfo",line});
 
 	
 	    return result;
