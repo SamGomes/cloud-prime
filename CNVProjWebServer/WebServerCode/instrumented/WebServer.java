@@ -22,6 +22,7 @@ public class WebServer {
 	
 		dbgo = new DynamoDBGeneralOperations();
 
+
 		dbgo.init();
 
 		myIP = InetAddress.getLocalHost().getHostAddress();
