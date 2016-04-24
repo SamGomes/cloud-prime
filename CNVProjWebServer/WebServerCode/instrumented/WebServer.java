@@ -20,13 +20,13 @@ public class WebServer {
 
 	public static void main(String[] args) throws Exception {
 	
-		//dbgo = new DynamoDBGeneralOperations();
+		dbgo = new DynamoDBGeneralOperations();
 
-		//dbgo.init();
+		dbgo.init();
 
 		myIP = InetAddress.getLocalHost().getHostAddress();
 		
-		//dbgo.createTable("123.78.65.43", "date",new String[] {"numberToBeFactored","ThreadId","reCalcFactorsInfo"});
+		dbgo.createTable("123.78.65.43", "date",new String[] {"numberToBeFactored","ThreadId","reCalcFactorsInfo"});
 
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
@@ -53,8 +53,8 @@ public class WebServer {
 //	    	 	line += in.readLine();
 //	    	 }
 //	    	 
-	    	 System.out.println("line: "+line);
-	 		//dbgo.insertTuple("123.78.65.43",new String[] {"date","12345","numberToBeFactored",String.valueOf(numberToBeFactored),"ThreadId",String.valueOf(id),"reCalcFactorsInfo",line});
+	    	System.out.println("line: "+line);
+	 		dbgo.insertTuple("123.78.65.43",new String[] {"date","12345","numberToBeFactored",String.valueOf(numberToBeFactored),"ThreadId",String.valueOf(id),"reCalcFactorsInfo",line});
 
 	
 	    return result;
