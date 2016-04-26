@@ -20,9 +20,11 @@ public class EC2LoadBalancer {
 	private static int next = 0;
     private static int TIME_TO_REFRESH_INSTANCES = 5000;
     private static Timer timer = new Timer();
+    private static String LoadBalancerIp;
  
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        LoadBalancerIp = InetAddress.getLocalHost().getHostAddress();
         server.createContext("/f.html", new MyHandler());
         server.setExecutor(null); // creates a default executor
         createInstanceList();
@@ -33,8 +35,9 @@ public class EC2LoadBalancer {
     public static void createInstanceList(){
     	
     	try{
-        	EC2GeneralOperations.init();
-        	instances = EC2GeneralOperations.getInstances();
+        	EC2LBGeneralOperations.init();
+            EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
+        	instances = EC2LBGeneralOperations.getInstances();
         	System.out.println(instances.toString());
         	next = 0;
     	}catch(Exception e){
@@ -58,7 +61,7 @@ public class EC2LoadBalancer {
     
     static class MyHandler implements HttpHandler {
         public void handle(final HttpExchange exchange) throws IOException {
- 
+
         new Thread(new Runnable(){
 
 			//@Override
@@ -119,8 +122,7 @@ public class EC2LoadBalancer {
 
     public static void updateRunningInstances(){
         instances = null;
-        instances = EC2GeneralOperations.getRunningInstancesArray();
+        instances = EC2LBGeneralOperations.getRunningInstancesArray();
         System.out.println("Running instances: "+instances.size());
     }
- 
 }

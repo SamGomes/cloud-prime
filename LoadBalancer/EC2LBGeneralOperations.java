@@ -40,7 +40,7 @@ import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 
-public class EC2GeneralOperations {
+public class EC2LBGeneralOperations {
 
     /*
      * Before running the code:
@@ -62,6 +62,7 @@ public class EC2GeneralOperations {
     private static int runningInstances = 0;
     private static ArrayList<Instance> instances;
     private static ArrayList<Instance> runningInstancesArray;
+    private static ArrayList<String> LoadBalancerExpectionList;
     private static Timer timer = new Timer();
     private static DescribeInstancesResult describeInstancesRequest;
     private static List<Reservation> reservations;
@@ -107,6 +108,7 @@ public class EC2GeneralOperations {
 
         instances = new ArrayList<Instance>();
         runningInstancesArray = new ArrayList<Instance>();
+        LoadBalancerExpectionList = new ArrayList<String>();
 
         updateRunningInstances(); 
         startTimer(); // Starts timer for refreshing instances
@@ -182,15 +184,27 @@ public class EC2GeneralOperations {
         }
         
         for(Instance instance :instances){
-            String state = instance.getState().getName();
-            
-            if (state.equals("running")){
-                runningInstances++;
-                runningInstancesArray.add(instance);
+            if (!LoadBalancerExpectionList.contains(instance.getPrivateIpAddress())){
+                String state = instance.getState().getName();
+
+                if (state.equals("running")){
+                    runningInstances++;
+                    runningInstancesArray.add(instance);
+                }
+            }else{
+                System.out.println("Found Load Balancer " + instance.getPrivateIpAddress());
             }
         }
     }
     public static ArrayList<Instance> getRunningInstancesArray(){
         return runningInstancesArray;
      }
+    public static void addLoadBalancerToExceptionList(String ip){
+        LoadBalancerExpectionList.add(ip);
+        if (LoadBalancerExpectionList.contains(ip)){
+            System.out.println("Load balancer ip added: + "+ ip);
+        }else{
+            System.out.println("Load balancer ip failed: + "+ ip);
+        }
+    }
 }

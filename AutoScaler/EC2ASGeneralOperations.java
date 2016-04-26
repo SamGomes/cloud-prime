@@ -40,7 +40,7 @@ import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 
-public class EC2GeneralOperations {
+public class EC2ASGeneralOperations {
 
     /*
      * Before running the code:
@@ -62,6 +62,7 @@ public class EC2GeneralOperations {
     private static int runningInstances = 0;
     private static ArrayList<Instance> instances;
     private static ArrayList<Instance> runningInstancesArray;
+    private static ArrayList<String> LoadBalancerExpectionList;
     private static Timer timer = new Timer();
     private static DescribeInstancesResult describeInstancesRequest;
     private static List<Reservation> reservations;
@@ -79,7 +80,6 @@ public class EC2GeneralOperations {
      * @see com.amazonaws.ClientConfiguration
      * 
      */
-     
 
      static void init() throws Exception {
 
@@ -182,15 +182,22 @@ public class EC2GeneralOperations {
         }
         
         for(Instance instance :instances){
-            String state = instance.getState().getName();
-            
-            if (state.equals("running")){
-                runningInstances++;
-                runningInstancesArray.add(instance);
+            if (!LoadBalancerExpectionList.contains(instance.getPrivateIpAddress())){
+                String state = instance.getState().getName();
+
+                if (state.equals("running")){
+                    runningInstances++;
+                    runningInstancesArray.add(instance);
+                }
             }
         }
     }
+
     public static ArrayList<Instance> getRunningInstancesArray(){
         return runningInstancesArray;
-     }
+    }
+
+    public static void addLoadBalancerToExceptionList(String ip){
+        LoadBalancerExpectionList.add(ip);
+    }
 }
