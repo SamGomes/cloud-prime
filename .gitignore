@@ -1,5 +1,7 @@
 AutoScaler/awsJavaSDK/*
 LoadBalancer/awsJavaSDK/*
 CNVProjWebServer/awsJavaSDK/*
+CNVProjWebServer/BIT/*
+report/*
 
 /**/*.class
