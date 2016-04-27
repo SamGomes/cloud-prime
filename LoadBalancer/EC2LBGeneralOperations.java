@@ -184,7 +184,7 @@ public class EC2LBGeneralOperations {
         }
         
         for(Instance instance :instances){
-            if (!LoadBalancerExpectionList.contains(instance.getPrivateIpAddress())){
+            if (!LoadBalancerExpectionList.contains(instance.getPublicIpAddress())){
                 String state = instance.getState().getName();
 
                 if (state.equals("running")){
@@ -200,6 +200,7 @@ public class EC2LBGeneralOperations {
         return runningInstancesArray;
      }
     public static void addLoadBalancerToExceptionList(String ip){
+        System.out.println("Public ip" + ip);
         LoadBalancerExpectionList.add(ip);
         if (LoadBalancerExpectionList.contains(ip)){
             System.out.println("Load balancer ip added: + "+ ip);

@@ -107,6 +107,7 @@ public class EC2ASGeneralOperations {
 
         instances = new ArrayList<Instance>();
         runningInstancesArray = new ArrayList<Instance>();
+        LoadBalancerExpectionList = new ArrayList<String>();
 
         updateRunningInstances(); 
         startTimer(); // Starts timer for refreshing instances
