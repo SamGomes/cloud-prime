@@ -1,7 +1,6 @@
 import java.io.*;
 import java.net.*;
-import java.util.HashMap;
-import java.util.ArrayList;
+import java.util.*;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -9,18 +8,17 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.client.methods.HttpGet;
 import com.amazonaws.services.ec2.model.Instance;
 import java.nio.charset.StandardCharsets;
-import java.util.Timer;
-import java.util.TimerTask;
 
 import com.sun.net.httpserver.*;
 
 public class EC2LoadBalancer {
 
-	private static ArrayList<Instance> instances;
+	private static HashMap<String,Instance> instances;
 	private static int next = 0;
     private static int TIME_TO_REFRESH_INSTANCES = 5000;
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
+    private static final double THRESHOLD = 0.5; //TODO: set a meaningful value
  
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -37,7 +35,8 @@ public class EC2LoadBalancer {
     	try{
         	EC2LBGeneralOperations.init();
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
-        	instances = EC2LBGeneralOperations.getInstances();
+        	//instances = EC2LBGeneralOperations.getInstances();
+            instances = EC2LBGeneralOperations.getRunningInstancesArray();
         	System.out.println(instances.toString());
         	next = 0;
     	}catch(Exception e){
@@ -71,21 +70,22 @@ public class EC2LoadBalancer {
 				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 
 			  try{
-			        String url = "http://"+instances.get(next).getPublicIpAddress()+":8000/f.html?n="+map.get("n");
-			        System.out.print("Next id: "+next+"\n");
+                    String machineIp = getBestMachineIp(0); //TODO: call cost estimator
+                    String url = "http://"+machineIp+":8000/f.html?n="+map.get("n");
+
+			        //String url = "http://"+instances.get(next).getPublicIpAddress()+":8000/f.html?n="+map.get("n");
+			        /*System.out.print("Next id: "+next+"\n");
 			        if (next >= (instances.size()-1)){
 			            next = 0;
 			        }else{
 			            next += 1;
-			        }
+			        } */
 
 					System.out.print(url+"\n");
 					HttpClient client = HttpClientBuilder.create().build();
 					HttpGet request = new HttpGet(url);
-	
-					
+
 					HttpResponse response = client.execute(request);
-	
 					System.out.println("Response Code : " 
 				                + response.getStatusLine().getStatusCode());
 	
@@ -124,5 +124,23 @@ public class EC2LoadBalancer {
         instances = null;
         instances = EC2LBGeneralOperations.getRunningInstancesArray();
         System.out.println("Running instances: "+instances.size());
+    }
+
+    public static String getBestMachineIp(int costEstimation){
+        String result = "none";
+        updateRunningInstances(); //update running instances
+        HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances); //TODO: get the current load of instances from MSS
+
+        for (Map.Entry<String,Double> entry: instanceLoad.entrySet()){
+            if (entry.getValue() + costEstimation < THRESHOLD){ //instance can process the request
+                //TODO: update instance load
+                return instances.get(entry.getKey()).getPublicIpAddress(); // return instance public ip
+            } else {
+                //continue to check if other instances can process the request
+            }
+        }
+        // if result = "none" -> put the request on hold
+        // or launch another instance (?)
+        return result;
     }
 }
