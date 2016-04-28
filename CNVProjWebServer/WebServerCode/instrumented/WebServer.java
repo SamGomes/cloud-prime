@@ -13,7 +13,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 
 
-public class WebServer {
+public class WebServer{
  
 
 	private static String myIP;
@@ -21,15 +21,13 @@ public class WebServer {
  	private static DynamoDBGeneralOperations dbgo;
 
 	public static void main(String[] args) throws Exception {
-	
-		// dbgo = new DynamoDBGeneralOperations();
 
 
-		// dbgo.init();
+		dbgo.init();
 
 		myIP = InetAddress.getLocalHost().getHostAddress();
 		
-		// dbgo.createTable("123.78.65.43", "date",new String[] {"numberToBeFactored","ThreadId","reCalcFactorsInfo"});
+		dbgo.createTable("MSSCentralTable", "numberToBeFactored",new String[] {"cost"});
 
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
@@ -39,12 +37,9 @@ public class WebServer {
  
 
 	private static String saveStats(String name,BigInteger numberToBeFactored,long id, InputStream ins) throws Exception {
-	   
+	    String line;
+	    String result;
 
-		
-
-	    String line = null;
-	    String result ="";
 	    BufferedReader in = new BufferedReader(
 	        new InputStreamReader(ins));
 	    result=name + " " +in.readLine();
@@ -59,9 +54,11 @@ public class WebServer {
 		// }
 	 
 		System.out.println("date: "+formatedDate);
-		// dbgo.insertTuple("123.78.65.43",new String[] {formatedDate,"12345","numberToBeFactored",String.valueOf(numberToBeFactored),"ThreadId",String.valueOf(id),"reCalcFactorsInfo",line});
-
-	
+		try {
+			dbgo.insertTuple("MSSCentralTable", new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored), "cost", line});
+		}catch(Exception e){
+			e.printStackTrace();
+		}
 	    return result;
 	}
 	 
@@ -90,37 +87,22 @@ public class WebServer {
 			
 			//@Override
 			public void run() {
-				
-				InputStream inpStream = exchange.getRequestBody();
 				Headers responseHeaders = exchange.getResponseHeaders();
 				responseHeaders.set("Content-Type", "text/html");
-				       
-				
 				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
-				
-				BigInteger numberToBeFactored= new  BigInteger(map.get("n").toString());
-
+				BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
 				try{
-
-
 				    Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain "+ numberToBeFactored);
-				    //Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput MainIntFactorization "+ numberToBeFactored);
-
 				    pro.waitFor();
 
-
 			        String response = saveStats("factorization result: ",numberToBeFactored,Thread.currentThread().getId(), pro.getInputStream());
+					System.out.print(response+"\n");
 
-			        System.out.print(response+"\n");
-			        
-			
 			        exchange.sendResponseHeaders(200, response.length());
 			        OutputStream os = exchange.getResponseBody();
 			        os.write(response.getBytes());
 			        os.close();
 		        }catch(Exception e){}
-			        
-				
 			}
 		}).start();
 

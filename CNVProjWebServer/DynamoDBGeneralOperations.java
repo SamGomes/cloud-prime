@@ -85,7 +85,7 @@ public class DynamoDBGeneralOperations {
          * credential profile by reading from the credentials file located at
          * (~/.aws/credentials).
          */
-         AWSCredentials credentials = null;
+         AWSCredentials credentials;
          
          credentials = new ProfileCredentialsProvider().getCredentials();
          
@@ -137,12 +137,12 @@ public class DynamoDBGeneralOperations {
     
         System.out.println("createTable! tableName: "+tableName+"  ,condition: "+condition+" attribute: "+attribute);
 
-        // HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
-        
-        // scanFilter.put(attribute, condition);
-        // ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-        // ScanResult scanResult = dynamoDB.scan(scanRequest);
-        // System.out.println("Result: " + scanResult);
+         HashMap scanFilter = new HashMap();
+
+         scanFilter.put(attribute, condition);
+         ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
+         ScanResult scanResult = dynamoDB.scan(scanRequest);
+         System.out.println("Result: " + scanResult);
     }
     
     static void insertTuple(String tableName,String[] attrAndValues) throws Exception {
@@ -162,7 +162,7 @@ public class DynamoDBGeneralOperations {
         for(int i=0; i<attrSize;i+=2){
             item.put(attrAndValues[i], new AttributeValue(attrAndValues[i+1]));
         }
-        
+
         PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
         PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
         System.out.println("Insertion result: " + putItemResult);
