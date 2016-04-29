@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 
+
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -34,6 +35,7 @@ public class EC2LoadBalancer {
     	
     	try{
         	EC2LBGeneralOperations.init();
+            DynamoDBGeneralOperations.init();
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
         	//instances = EC2LBGeneralOperations.getInstances();
             instances = EC2LBGeneralOperations.getRunningInstancesArray();
@@ -80,6 +82,11 @@ public class EC2LoadBalancer {
 			        }else{
 			            next += 1;
 			        } */
+
+                    String test = DynamoDBGeneralOperations.queryTable("MSSCentralTable","numberToBeFactored",numberToBeFactored,"EQ").get(0).get("cost").getS();
+
+                    System.out.print("test: "+test+"\n");
+
 
 					System.out.print(url+"\n");
 					HttpClient client = HttpClientBuilder.create().build();
