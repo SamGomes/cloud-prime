@@ -13,13 +13,7 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.Date;
-import java.util.ArrayList;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
@@ -61,7 +55,7 @@ public class EC2LBGeneralOperations {
     
     private static int runningInstances = 0;
     private static ArrayList<Instance> instances;
-    private static ArrayList<Instance> runningInstancesArray;
+    private static HashMap<String,Instance> runningInstancesArray;
     private static ArrayList<String> LoadBalancerExpectionList;
     private static Timer timer = new Timer();
     private static DescribeInstancesResult describeInstancesRequest;
@@ -107,7 +101,7 @@ public class EC2LBGeneralOperations {
         cloudWatch.setEndpoint("monitoring.us-west-2.amazonaws.com"); 
 
         instances = new ArrayList<Instance>();
-        runningInstancesArray = new ArrayList<Instance>();
+        runningInstancesArray = new HashMap<>();
         LoadBalancerExpectionList = new ArrayList<String>();
 
         updateRunningInstances(); 
@@ -189,14 +183,15 @@ public class EC2LBGeneralOperations {
 
                 if (state.equals("running")){
                     runningInstances++;
-                    runningInstancesArray.add(instance);
+                    //runningInstancesArray.add(instance);
+                    runningInstancesArray.put(instance.getInstanceId(),instance);
                 }
             }else{
                 System.out.println("Found Load Balancer " + instance.getPrivateIpAddress());
             }
         }
     }
-    public static ArrayList<Instance> getRunningInstancesArray(){
+    public static HashMap<String,Instance> getRunningInstancesArray(){
         return runningInstancesArray;
      }
     public static void addLoadBalancerToExceptionList(String ip){
