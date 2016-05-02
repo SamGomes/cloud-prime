@@ -19,8 +19,6 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.regions.Region;
@@ -61,6 +59,9 @@ public class DynamoDBWebServerGeneralOperations {
      */
 
     static AmazonDynamoDBClient dynamoDB;
+    private static final String TABLE_NAME = "MSSCentralTable";
+    private static final String PRIMARY_KEY = "numberToBeFactored";
+    private static final String COST_ATTRIBUTE = "cost";
     
      
 
@@ -174,18 +175,20 @@ public class DynamoDBWebServerGeneralOperations {
         expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
 
         QueryRequest queryRequest = new QueryRequest()
-                .withFilterExpression("Price < :val")
+                .withFilterExpression(PRIMARY_KEY+" < :val")
                 .withScanIndexForward(false)
                 .withExpressionAttributeValues(expressionAttributeValues)
-                .withConsistentRead(true);
+                .withConsistentRead(true)
+                .withLimit(10);
 
         QueryResult result = dynamoDB.query(queryRequest);
 
         QueryRequest queryHigherRequest = new QueryRequest()
-                .withFilterExpression("Price > :val")
+                .withFilterExpression(PRIMARY_KEY+" > :val")
                 .withScanIndexForward(false)
                 .withExpressionAttributeValues(expressionHigherAttributeValues)
-                .withConsistentRead(true);
+                .withConsistentRead(true)
+                .withLimit(10);
 
         QueryResult higherResult = dynamoDB.query(queryHigherRequest);
 

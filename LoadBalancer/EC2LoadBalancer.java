@@ -36,7 +36,7 @@ public class EC2LoadBalancer {
     	
     	try{
         	EC2LBGeneralOperations.init();
-            DynamoDBWebServerGeneralOperations.init();
+            DynamoDBGeneralOperations.init();
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
         	//instances = EC2LBGeneralOperations.getInstances();
             instances = EC2LBGeneralOperations.getRunningInstancesArray();
@@ -73,8 +73,9 @@ public class EC2LoadBalancer {
 				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 
 			  try{
-                    String machineIp = getBestMachineIp(BigInteger.valueOf(0)); //TODO: call cost estimator
-                    String url = "http://"+machineIp+":8000/f.html?n="+map.get("n");
+				  	BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
+                    String machineIp = getBestMachineIp(numberToBeFactored); //TODO: call cost estimator
+                    String url = "http://"+machineIp+":8000/f.html?n="+numberToBeFactored;
 
 			        //String url = "http://"+instances.get(next).getPublicIpAddress()+":8000/f.html?n="+map.get("n");
 			        /*System.out.print("Next id: "+next+"\n");
@@ -89,7 +90,7 @@ public class EC2LoadBalancer {
                     //System.out.print("test: "+test+"\n");
 
 
-					System.out.print(url+"\n");
+					//System.out.print(url+"\n");
 					HttpClient client = HttpClientBuilder.create().build();
 					HttpGet request = new HttpGet(url);
 
@@ -138,7 +139,7 @@ public class EC2LoadBalancer {
         String result = "none";
         updateRunningInstances(); //update running instances
 
-        DynamoDBWebServerGeneralOperations.estimateCost(costEstimation);
+        DynamoDBGeneralOperations.estimateCost(costEstimation);
 
         /*HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances); //TODO: get the current load of instances from MSS
 
