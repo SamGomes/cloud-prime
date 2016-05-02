@@ -1,13 +1,17 @@
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.*;
 
 public class EstimatorTrial {
 
     // HashMap<numberFactorized , cost>
-    static HashMap<Integer, Integer> costs = new HashMap<>();
+    static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
     private static int ESTIMATED_COST = 1;
     private static int DIRECT_COST = 2;
+    private static int DECIMAL_HOUSES = 6;
 
     public static void main(String[] args) throws Exception {
 
@@ -21,12 +25,14 @@ public class EstimatorTrial {
         System.out.println("Give me a number to be factored:");
 
         Scanner scan = new Scanner(System.in);
-        int nFactor = scan.nextInt();
+        BigInteger nFactor = scan.nextBigInteger();
 
         //choose the estimated cost
-        int[] result = chooseCost(nFactor);
-        int estimatedCost = result[0];
-        int isEstimated = result[1];
+        HashMap<BigInteger,Integer> finalResult = chooseCost(nFactor);
+        BigInteger[] resK = finalResult.keySet().toArray(new BigInteger[]{});
+        Integer[] resV = finalResult.values().toArray(new Integer[]{});
+        BigInteger estimatedCost = resK[0];
+        int isEstimated = resV[0];
 
         //print cost choosen and why
         printCost(nFactor, estimatedCost, isEstimated);
@@ -35,19 +41,22 @@ public class EstimatorTrial {
 
     }
 
-    private static void printCost(int numberToFactor, int estimatedC, int isEstimate){
+    private static void printCost(BigInteger numberToFactor, BigInteger estimatedC, int isEstimate){
         System.out.println("Number to factor: " + String.valueOf(numberToFactor));
         System.out.println("Cost: " + String.valueOf(estimatedC));
         System.out.println("This is " + (isEstimate == ESTIMATED_COST ? "an ESTIMATED" : "a DIRECT") + " cost.");
     }
 
-    private static int[] chooseCost(int numberToFactorize){
+    private static HashMap<BigInteger,Integer> chooseCost(BigInteger numberToFactorize){
+
+        HashMap<BigInteger,Integer> result = new HashMap<BigInteger,Integer>();
+
         // if we know the cost of the number to factorize we return it
         if(costs.containsKey(numberToFactorize)){
-            return new int[]{costs.get(numberToFactorize), DIRECT_COST};
-
+            result.put(costs.get(numberToFactorize), DIRECT_COST);
+            return result;
         } else { // gets nearest value cost
-            Integer[] keys = costs.keySet().toArray(new Integer[costs.size()]);
+            BigInteger[] keys = costs.keySet().toArray(new BigInteger[costs.size()]);
 //            int[] nearestNumberToFactorV = nearestK(keys, numberToFactorize, 3);
 //            int nearestNumber = nearestNumberToFactorV[0];
 
@@ -55,51 +64,101 @@ public class EstimatorTrial {
 //            int[] lowerAndHigher = findNearestCostInterval(keys, numberToFactorize);
 //            System.out.println("Lower value: " + lowerAndHigher[0]);
 //            System.out.println("Higher value: " + lowerAndHigher[1]);
-
-            return new int[]{calculateEstimatedCost(keys, numberToFactorize), ESTIMATED_COST};
+            result.put(calculateEstimatedCost(keys, numberToFactorize), ESTIMATED_COST);
+            return result;
         }
     }
 
-    public static int calculateEstimatedCost(Integer[] array, int val){
+    public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val){
 
         // Find nearest number factored key interval
-        NavigableSet<Integer> values = new TreeSet<Integer>();
-        for (int x : array) { values.add(x); }
-        int lower = values.floor(val);
-        int higher = values.ceiling(val);
+        NavigableSet<BigInteger> values = new TreeSet<BigInteger>();
+        for (BigInteger x : array) { values.add(x); }
+        BigInteger l = values.floor(val);
+        BigInteger h = values.ceiling(val);
         //return new int[]{lower, higher};
+        BigDecimal value = new BigDecimal(val);
 
-        // Proportions
-        double lowerProportion = 1 - (val - lower)/((double)(higher - lower));
-        double higherProportion = 1 - (higher - val)/((double) (higher - lower));
+        BigDecimal finalCost;
 
-//        System.out.println("Lower: " + lower);
-//        System.out.println("Higher: " + higher);
-//        System.out.println("LowerPro: " + lowerProportion);
-//        System.out.println("HigherPro: " + higherProportion);
-//        System.out.println("Estimated Cost: " + Math.round(lowerProportion * costs.get(lower) + higherProportion * costs.get(higher)));
+        System.out.println("Lower: " + l);
+        System.out.println("Higher: " + h);
 
-        return (int) Math.round(lowerProportion * costs.get(lower) + higherProportion * costs.get(higher));
+        if(h == null || l == null) {
+
+            if(h == null) {
+                finalCost = (value.multiply(new BigDecimal(costs.get(l))).divide(new BigDecimal(l), DECIMAL_HOUSES, RoundingMode.CEILING));
+            } else {
+                finalCost = (value.multiply(new BigDecimal(costs.get(h))).divide(new BigDecimal(h), DECIMAL_HOUSES, RoundingMode.CEILING));
+            }
+        } else {
+
+            BigDecimal lower = new BigDecimal(l);
+            BigDecimal higher = new BigDecimal(h);
+
+            // Proportions
+            BigDecimal lowerProportion = BigDecimal.ONE.subtract((value.subtract(lower)).divide(higher.subtract(lower), DECIMAL_HOUSES, RoundingMode.CEILING));
+            BigDecimal higherProportion = BigDecimal.ONE.subtract((higher.subtract(value)).divide(higher.subtract(lower), DECIMAL_HOUSES, RoundingMode.CEILING));
+            finalCost = (lowerProportion.multiply(new BigDecimal(costs.get(lower.toBigInteger()))).add(higherProportion.multiply(new BigDecimal(costs.get(higher.toBigInteger())))));
+
+            System.out.println("LowerPro: " + lowerProportion);
+            System.out.println("HigherPro: " + higherProportion);
+        }
+
+        System.out.println(finalCost);
+
+        return finalCost.toBigInteger();
     }
+//
+//    public static int calculate3SimpleRuleEstimatedCost(BigInteger[] array, BigInteger val){
+//
+//    }
 
     private static void populateCosts() {
-        int[][] madeUpCosts = {
-                {1, 2},
-                {3, 4},
-                {6, 10},
-                {9, 45},
-                {12, 4},
-                {25, 5},
-                {75, 6},
-                {101, 67},
-                {893, 57},
-                {1000, 46},
-                {4345, 102},
-                {5657453, 2067}
+        BigInteger[] madeUpFactors = {
+                new BigInteger("1"),
+                new BigInteger("49"),
+                new BigInteger("76"),
+                new BigInteger("5362334"),
+                new BigInteger("48765433")
+//                new BigInteger("3"),
+//                new BigInteger("6"),
+//                new BigInteger("9"),
+//                new BigInteger("12"),
+//                new BigInteger("25"),
+//                new BigInteger("49"),
+//                new BigInteger("75"),
+//                new BigInteger("101"),
+//                new BigInteger("893"),
+//                new BigInteger("1000"),
+//                new BigInteger("4345"),
+////                BigInteger.valueOf(5657453)
+//                new BigInteger("5657453869890899797999999999999999999999999999979")
         };
 
-        for (int[] metric : madeUpCosts){
-            costs.put(metric[0], metric[1]);
+        BigInteger[] madeUpCosts = {
+                new BigInteger("0"),
+                new BigInteger("8"),
+                new BigInteger("9"),
+                new BigInteger("2315"),
+                new BigInteger("6982")
+//                new BigInteger("4"),
+//                new BigInteger("10"),
+//                new BigInteger("45"),
+//                new BigInteger("4"),
+//                new BigInteger("5"),
+//                new BigInteger("8"),
+//                new BigInteger("6"),
+//                new BigInteger("67"),
+//                new BigInteger("57"),
+//                new BigInteger("46"),
+//                new BigInteger("102"),
+//                new BigInteger("2067")
+        };
+
+//        for (int[] metric : madeUpCosts){
+        for (int i = 0; i < madeUpCosts.length; i++){
+            costs.put(madeUpFactors[i], madeUpCosts[i]);
         }
     }
 
