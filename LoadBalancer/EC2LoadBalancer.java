@@ -1,17 +1,24 @@
-import java.io.*;
-import java.math.BigInteger;
-import java.net.*;
-import java.util.*;
-
-
+import com.amazonaws.services.ec2.model.Instance;
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.client.methods.HttpGet;
-import com.amazonaws.services.ec2.model.Instance;
-import java.nio.charset.StandardCharsets;
+import org.apache.http.impl.client.HttpClientBuilder;
 
-import com.sun.net.httpserver.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.math.BigInteger;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class EC2LoadBalancer {
 
@@ -138,11 +145,12 @@ public class EC2LoadBalancer {
         String result = "none";
         updateRunningInstances(); //update running instances
 
-        BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation);
-        //BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation);
+        BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
+        //BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
         System.out.println("Estimated cost "+response.toString());
 
-        /*HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances); //TODO: get the current load of instances from MSS
+        //TODO: get the current load of instances from MSS
+        /*HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances);
 
         for (Map.Entry<String,Double> entry: instanceLoad.entrySet()){
             if (entry.getValue() + costEstimation < THRESHOLD){ //instance can process the request
