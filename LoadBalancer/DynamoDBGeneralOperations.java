@@ -15,18 +15,20 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-import java.math.BigInteger;
-import java.util.HashMap;
-import java.util.Map;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
-import com.amazonaws.services.elasticache.model.SourceType;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.util.*;
 
 
 public class DynamoDBGeneralOperations {
@@ -63,7 +65,10 @@ public class DynamoDBGeneralOperations {
     private static final String TABLE_NAME = "MSSCentralTable";
     private static final String PRIMARY_KEY = "numberToBeFactored";
     private static final String COST_ATTRIBUTE = "cost";
-
+    private static int ESTIMATED_COST = 1;
+    private static int DIRECT_COST = 2;
+    private static int DECIMAL_PlACES = 6;
+    static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
 
 
     static void init() throws Exception {
@@ -157,7 +162,7 @@ public class DynamoDBGeneralOperations {
         System.out.println("Insertion result: " + putItemResult);
     }
 
-    static int estimateCost(BigInteger estimate){
+    static BigInteger estimateCost(BigInteger estimate){
 
         /*QuerySpec spec = new QuerySpec()
                 .withKeyConditionExpression(PRIMARY_KEY + " < :v_id")
@@ -167,46 +172,134 @@ public class DynamoDBGeneralOperations {
                 .withConsistentRead(true);
         spec.setMaxResultSize(10);*/
 
+        //TODO: Query with < and > operators and scan index forward
 
-        Map<String, AttributeValue> expressionAttributeValues =
-                new HashMap<>();
-        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
+        BigInteger response = BigInteger.valueOf(0);
 
-        Map<String, AttributeValue> expressionHigherAttributeValues =
-                new HashMap<>();
-        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
+        Map<String, AttributeValue> lastEvaluatedKey = null;
+        do {
 
-        QueryRequest queryRequest = new QueryRequest()
-                .withFilterExpression(PRIMARY_KEY+" < :val")
-                .withScanIndexForward(false)
-                .withExpressionAttributeValues(expressionAttributeValues)
-                .withConsistentRead(true)
-                .withLimit(10);
+            try{
+                Condition hashKeyCondition = new Condition()
+                        .withComparisonOperator(ComparisonOperator.EQ.toString())
+                        .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
 
-        QueryResult result = dynamoDB.query(queryRequest);
+                Map<String, Condition> keyConditions = new HashMap<>();
+                keyConditions.put("numberToBeFactored", hashKeyCondition);
+                //keyConditions.put("cost", rangeKeyCondition);
 
-        QueryRequest queryHigherRequest = new QueryRequest()
-                .withFilterExpression(PRIMARY_KEY+" > :val")
-                .withScanIndexForward(false)
-                .withExpressionAttributeValues(expressionHigherAttributeValues)
-                .withConsistentRead(true)
-                .withLimit(10);
+                QueryRequest queryRequest = new QueryRequest()
+                        .withTableName(TABLE_NAME)
+                        .withKeyConditions(keyConditions)
+                        .withLimit(2);
 
-        QueryResult higherResult = dynamoDB.query(queryHigherRequest);
-
-        for (Map<String, AttributeValue> item : result.getItems()) {
-            for (String key: item.keySet()){
-                System.out.println(key);
+                QueryResult result = dynamoDB.query(queryRequest);
+                for (Map<String, AttributeValue> item : result.getItems()) {
+                    AttributeValue value = item.get(PRIMARY_KEY);
+                    AttributeValue cost = item.get(COST_ATTRIBUTE);
+                    System.out.println(value.toString());
+                    System.out.println(cost.toString());
+                }
+                lastEvaluatedKey = result.getLastEvaluatedKey();
+            }catch (Exception e){
+                e.printStackTrace();
             }
+        } while (lastEvaluatedKey != null);
+
+        return response;
+    }
+
+    static BigInteger estimateCostScan(BigInteger estimate){
+
+        ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
+
+        try{
+            Map<String, AttributeValue> expressionAttributeValues =
+                    new HashMap<>();
+            expressionAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
+
+            Map<String, AttributeValue> expressionHigherAttributeValues =
+                    new HashMap<>();
+            expressionHigherAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
+
+            ScanRequest scanRequest = new ScanRequest()
+                    .withTableName(TABLE_NAME)
+                    .withFilterExpression("numberToBeFactored < :val")
+                    .withExpressionAttributeValues(expressionAttributeValues);
+
+            ScanResult lowerClosestValue = dynamoDB.scan(scanRequest);
+
+            ScanRequest scanHigherRequest = new ScanRequest()
+                    .withTableName(TABLE_NAME)
+                    .withFilterExpression("numberToBeFactored > :val")
+                    .withExpressionAttributeValues(expressionHigherAttributeValues);
+
+            ScanResult higherClosestValue = dynamoDB.scan(scanHigherRequest);
+
+            System.out.println("Query response size " + lowerClosestValue.getItems().size() );
+            System.out.println("Query response size " + higherClosestValue.getItems().size() );
+
+            for (Map<String, AttributeValue> item : lowerClosestValue.getItems()){
+                AttributeValue value = item.get(PRIMARY_KEY);
+                AttributeValue cost = item.get(COST_ATTRIBUTE);
+                numbersFactorized.add(new BigInteger(value.getS()));
+                costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
+            }
+
+            for (Map<String, AttributeValue> item : higherClosestValue.getItems()){
+                AttributeValue value = item.get(PRIMARY_KEY);
+                AttributeValue cost = item.get(COST_ATTRIBUTE);
+                numbersFactorized.add(new BigInteger(value.getS()));
+                costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
+            }
+        }catch (Exception e){
+            e.printStackTrace();
         }
 
-        for (Map<String, AttributeValue> item : higherResult.getItems()) {
-            for (String key: item.keySet()){
-                System.out.println(key);
+        BigInteger[] array = new BigInteger[numbersFactorized.size()];
+        array = numbersFactorized.toArray(array);
+        BigInteger result = calculateEstimatedCost(array, estimate);
+        return result;
+    }
+
+    public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val){
+
+        // Find nearest number factored key interval
+        NavigableSet<BigInteger> values = new TreeSet<BigInteger>();
+        for (BigInteger x : array) { values.add(x); }
+        BigInteger l = values.floor(val);
+        BigInteger h = values.ceiling(val);
+        //return new int[]{lower, higher};
+        BigDecimal value = new BigDecimal(val);
+
+        BigDecimal finalCost = new BigDecimal(0);
+        BigDecimal finalCostRounded = new BigDecimal(0);
+
+        try{
+            if(h == null || l == null) {
+
+                if(h == null) {
+                    finalCost = (value.multiply(new BigDecimal(costs.get(l))).divide(new BigDecimal(l), DECIMAL_PlACES, RoundingMode.CEILING));
+                } else {
+                    finalCost = (value.multiply(new BigDecimal(costs.get(h))).divide(new BigDecimal(h), DECIMAL_PlACES, RoundingMode.CEILING));
+                }
+            } else {
+
+                BigDecimal lower = new BigDecimal(l);
+                BigDecimal higher = new BigDecimal(h);
+
+                // Proportions
+                BigDecimal lowerProportion = BigDecimal.ONE.subtract((value.subtract(lower)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
+                BigDecimal higherProportion = BigDecimal.ONE.subtract((higher.subtract(value)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
+                finalCost = (lowerProportion.multiply(new BigDecimal(costs.get(lower.toBigInteger()))).add(higherProportion.multiply(new BigDecimal(costs.get(higher.toBigInteger())))));
             }
+
+            finalCostRounded = finalCost.setScale(0, BigDecimal.ROUND_HALF_UP);
+        }catch (Exception e){
+            e.printStackTrace();
         }
 
-        return 0;
+        return finalCostRounded.toBigInteger();
     }
 }
     

@@ -1,13 +1,13 @@
-import java.io.IOException;
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
-import java.util.*;
+import java.util.HashMap;
+import java.util.NavigableSet;
+import java.util.Scanner;
+import java.util.TreeSet;
 
 public class EstimatorTrial {
 
-    // HashMap<numberFactorized , cost>
     static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
     private static int ESTIMATED_COST = 1;
     private static int DIRECT_COST = 2;
@@ -57,13 +57,6 @@ public class EstimatorTrial {
             return result;
         } else { // gets nearest value cost
             BigInteger[] keys = costs.keySet().toArray(new BigInteger[costs.size()]);
-//            int[] nearestNumberToFactorV = nearestK(keys, numberToFactorize, 3);
-//            int nearestNumber = nearestNumberToFactorV[0];
-
-            //TESTING PURPOSES
-//            int[] lowerAndHigher = findNearestCostInterval(keys, numberToFactorize);
-//            System.out.println("Lower value: " + lowerAndHigher[0]);
-//            System.out.println("Higher value: " + lowerAndHigher[1]);
             result.put(calculateEstimatedCost(keys, numberToFactorize), ESTIMATED_COST);
             return result;
         }
@@ -71,6 +64,7 @@ public class EstimatorTrial {
 
     public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val){
 
+        populateCosts();
         // Find nearest number factored key interval
         NavigableSet<BigInteger> values = new TreeSet<BigInteger>();
         for (BigInteger x : array) { values.add(x); }
@@ -79,33 +73,39 @@ public class EstimatorTrial {
         //return new int[]{lower, higher};
         BigDecimal value = new BigDecimal(val);
 
-        BigDecimal finalCost;
+        BigDecimal finalCost = new BigDecimal(0);
 
         System.out.println("Lower: " + l);
         System.out.println("Higher: " + h);
+        System.out.println("Lower cost: "+ costs.get(l));
+        System.out.println("Higher cost: "+ costs.get(h));
 
-        if(h == null || l == null) {
+        try{
+            if(h == null || l == null) {
 
-            if(h == null) {
-                finalCost = (value.multiply(new BigDecimal(costs.get(l))).divide(new BigDecimal(l), DECIMAL_HOUSES, RoundingMode.CEILING));
+                if(h == null) {
+                    finalCost = (value.multiply(new BigDecimal(costs.get(l))).divide(new BigDecimal(l), DECIMAL_HOUSES, RoundingMode.CEILING));
+                } else {
+                    finalCost = (value.multiply(new BigDecimal(costs.get(h))).divide(new BigDecimal(h), DECIMAL_HOUSES, RoundingMode.CEILING));
+                }
             } else {
-                finalCost = (value.multiply(new BigDecimal(costs.get(h))).divide(new BigDecimal(h), DECIMAL_HOUSES, RoundingMode.CEILING));
+
+                BigDecimal lower = new BigDecimal(l);
+                BigDecimal higher = new BigDecimal(h);
+
+                // Proportions
+                BigDecimal lowerProportion = BigDecimal.ONE.subtract((value.subtract(lower)).divide(higher.subtract(lower), DECIMAL_HOUSES, RoundingMode.CEILING));
+                BigDecimal higherProportion = BigDecimal.ONE.subtract((higher.subtract(value)).divide(higher.subtract(lower), DECIMAL_HOUSES, RoundingMode.CEILING));
+                finalCost = (lowerProportion.multiply(new BigDecimal(costs.get(lower.toBigInteger()))).add(higherProportion.multiply(new BigDecimal(costs.get(higher.toBigInteger())))));
+
+                System.out.println("LowerPro: " + lowerProportion);
+                System.out.println("HigherPro: " + higherProportion);
             }
-        } else {
 
-            BigDecimal lower = new BigDecimal(l);
-            BigDecimal higher = new BigDecimal(h);
-
-            // Proportions
-            BigDecimal lowerProportion = BigDecimal.ONE.subtract((value.subtract(lower)).divide(higher.subtract(lower), DECIMAL_HOUSES, RoundingMode.CEILING));
-            BigDecimal higherProportion = BigDecimal.ONE.subtract((higher.subtract(value)).divide(higher.subtract(lower), DECIMAL_HOUSES, RoundingMode.CEILING));
-            finalCost = (lowerProportion.multiply(new BigDecimal(costs.get(lower.toBigInteger()))).add(higherProportion.multiply(new BigDecimal(costs.get(higher.toBigInteger())))));
-
-            System.out.println("LowerPro: " + lowerProportion);
-            System.out.println("HigherPro: " + higherProportion);
+            System.out.println(finalCost);
+        }catch (Exception e){
+            e.printStackTrace();
         }
-
-        System.out.println(finalCost);
 
         return finalCost.toBigInteger();
     }
@@ -119,44 +119,32 @@ public class EstimatorTrial {
                 new BigInteger("1"),
                 new BigInteger("49"),
                 new BigInteger("76"),
+                new BigInteger("1000"),
+                new BigInteger("1025"),
+                new BigInteger("1050"),
+                new BigInteger("1075"),
+                new BigInteger("1500"),
+                new BigInteger("2000"),
+                new BigInteger("2500"),
                 new BigInteger("5362334"),
                 new BigInteger("48765433")
-//                new BigInteger("3"),
-//                new BigInteger("6"),
-//                new BigInteger("9"),
-//                new BigInteger("12"),
-//                new BigInteger("25"),
-//                new BigInteger("49"),
-//                new BigInteger("75"),
-//                new BigInteger("101"),
-//                new BigInteger("893"),
-//                new BigInteger("1000"),
-//                new BigInteger("4345"),
-////                BigInteger.valueOf(5657453)
-//                new BigInteger("5657453869890899797999999999999999999999999999979")
         };
 
         BigInteger[] madeUpCosts = {
                 new BigInteger("0"),
                 new BigInteger("8"),
                 new BigInteger("9"),
+                new BigInteger("36"),
+                new BigInteger("33"),
+                new BigInteger("36"),
+                new BigInteger("33"),
+                new BigInteger("43"),
+                new BigInteger("50"),
+                new BigInteger("55"),
                 new BigInteger("2315"),
                 new BigInteger("6982")
-//                new BigInteger("4"),
-//                new BigInteger("10"),
-//                new BigInteger("45"),
-//                new BigInteger("4"),
-//                new BigInteger("5"),
-//                new BigInteger("8"),
-//                new BigInteger("6"),
-//                new BigInteger("67"),
-//                new BigInteger("57"),
-//                new BigInteger("46"),
-//                new BigInteger("102"),
-//                new BigInteger("2067")
         };
 
-//        for (int[] metric : madeUpCosts){
         for (int i = 0; i < madeUpCosts.length; i++){
             costs.put(madeUpFactors[i], madeUpCosts[i]);
         }

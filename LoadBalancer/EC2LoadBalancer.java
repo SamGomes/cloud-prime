@@ -40,7 +40,6 @@ public class EC2LoadBalancer {
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
         	//instances = EC2LBGeneralOperations.getInstances();
             instances = EC2LBGeneralOperations.getRunningInstancesArray();
-        	System.out.println(instances.toString());
         	next = 0;
     	}catch(Exception e){
 
@@ -139,7 +138,9 @@ public class EC2LoadBalancer {
         String result = "none";
         updateRunningInstances(); //update running instances
 
-        DynamoDBGeneralOperations.estimateCost(costEstimation);
+        BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation);
+        //BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation);
+        System.out.println("Estimated cost "+response.toString());
 
         /*HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances); //TODO: get the current load of instances from MSS
 

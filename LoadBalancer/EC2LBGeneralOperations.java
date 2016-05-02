@@ -156,7 +156,6 @@ public class EC2LBGeneralOperations {
             @Override
             public void run() {
                 updateRunningInstances();
-                System.out.println(""+runningInstancesArray.size());
             }
         }, TIME_TO_REFRESH_INSTANCES, TIME_TO_REFRESH_INSTANCES);
     }
@@ -195,12 +194,6 @@ public class EC2LBGeneralOperations {
         return runningInstancesArray;
      }
     public static void addLoadBalancerToExceptionList(String ip){
-        System.out.println("Public ip" + ip);
         LoadBalancerExpectionList.add(ip);
-        if (LoadBalancerExpectionList.contains(ip)){
-            System.out.println("Load balancer ip added: + "+ ip);
-        }else{
-            System.out.println("Load balancer ip failed: + "+ ip);
-        }
     }
 }
