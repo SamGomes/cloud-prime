@@ -18,7 +18,7 @@ public class WebServer{
 
 	private static String myIP;
 
- 	private static DynamoDBGeneralOperations dbgo;
+ 	private static DynamoDBWebServerGeneralOperations dbgo;
 
 	public static void main(String[] args) throws Exception {
 

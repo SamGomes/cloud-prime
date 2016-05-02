@@ -15,33 +15,18 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.List;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.amazonaws.services.dynamodbv2.model.ComparisonOperator;
-import com.amazonaws.services.dynamodbv2.model.Condition;
-import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
-import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
-import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
-import com.amazonaws.services.dynamodbv2.model.KeyType;
-import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
-import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
-import com.amazonaws.services.dynamodbv2.model.PutItemResult;
-import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
-import com.amazonaws.services.dynamodbv2.model.ScanRequest;
-import com.amazonaws.services.dynamodbv2.model.ScanResult;
-import com.amazonaws.services.dynamodbv2.model.TableDescription;
+import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
+import com.amazonaws.services.elasticache.model.SourceType;
 
 
 public class DynamoDBGeneralOperations {
@@ -71,12 +56,15 @@ public class DynamoDBGeneralOperations {
      * @see com.amazonaws.auth.BasicAWSCredentials
      * @see com.amazonaws.auth.PropertiesCredentials
      * @see com.amazonaws.ClientConfiguration
-     * 
+     *
      */
 
     static AmazonDynamoDBClient dynamoDB;
-    
-     
+    private static final String TABLE_NAME = "MSSCentralTable";
+    private static final String PRIMARY_KEY = "numberToBeFactored";
+    private static final String COST_ATTRIBUTE = "cost";
+
+
 
     static void init() throws Exception {
 
@@ -86,13 +74,13 @@ public class DynamoDBGeneralOperations {
          * credential profile by reading from the credentials file located at
          * (~/.aws/credentials).
          */
-         AWSCredentials credentials;
-         
-         credentials = new ProfileCredentialsProvider().getCredentials();
-         
-         dynamoDB = new AmazonDynamoDBClient(credentials);
-         Region usWest2 = Region.getRegion(Regions.US_WEST_2);
-         dynamoDB.setRegion(usWest2);
+        AWSCredentials credentials;
+
+        credentials = new ProfileCredentialsProvider().getCredentials();
+
+        dynamoDB = new AmazonDynamoDBClient(credentials);
+        Region usWest2 = Region.getRegion(Regions.US_WEST_2);
+        dynamoDB.setRegion(usWest2);
     }
 
     static void createTable(String tableName,String keyAttr,String[] attributes) throws Exception {
@@ -111,10 +99,10 @@ public class DynamoDBGeneralOperations {
         } else {
             // Create a table with a primary hash key named 'name', which holds a string
             CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-                .withKeySchema(new KeySchemaElement[]{new KeySchemaElement().withAttributeName(keyAttr).withKeyType(KeyType.HASH)})
-                .withAttributeDefinitions(new AttributeDefinition[]{new AttributeDefinition().withAttributeName(keyAttr).withAttributeType(ScalarAttributeType.S)})
-                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(new Long(1)).withWriteCapacityUnits(new Long(1)));
-                TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
+                    .withKeySchema(new KeySchemaElement[]{new KeySchemaElement().withAttributeName(keyAttr).withKeyType(KeyType.HASH)})
+                    .withAttributeDefinitions(new AttributeDefinition[]{new AttributeDefinition().withAttributeName(keyAttr).withAttributeType(ScalarAttributeType.S)})
+                    .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(new Long(1)).withWriteCapacityUnits(new Long(1)));
+            TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
             System.out.println("Created Table: " + createdTableDescription);
 
             // Wait for it to become active
@@ -122,36 +110,30 @@ public class DynamoDBGeneralOperations {
             System.out.println("Waiting for " + tableName + " to become ACTIVE...");
             Tables.awaitTableToBecomeActive(dynamoDB, tableName);
         }
-        
+
     }
 
     static void describeTable(String tableName) throws Exception {
 
         System.out.println("describeTable tableName"+tableName);
-        
+
         // DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(tableName);
         // TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
-        // System.out.println("Table Description: " + tableDescription);        
+        // System.out.println("Table Description: " + tableDescription);
     }
 
-    static List<Map<String,AttributeValue>> queryTable(String tableName,String attribute,String value,String op) throws Exception {
-    
-        System.out.println("createTable! tableName: "+tableName+"  ,vaalue: "+value+" attribute: "+attribute+" op: "+op);
+    static void queryTable(String tableName,String attribute,Condition condition) throws Exception {
 
-        Condition condition = new Condition()
-                                .withComparisonOperator(op)
-                                .withAttributeValueList(new AttributeValue().withS(value));
+        System.out.println("createTable! tableName: "+tableName+"  ,condition: "+condition+" attribute: "+attribute);
 
-         HashMap scanFilter = new HashMap();
+        HashMap scanFilter = new HashMap();
 
-         scanFilter.put(attribute, condition);
-         ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-         ScanResult scanResult = dynamoDB.scan(scanRequest);
-         return scanResult.getItems();
-
-
+        scanFilter.put(attribute, condition);
+        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
+        ScanResult scanResult = dynamoDB.scan(scanRequest);
+        System.out.println("Result: " + scanResult);
     }
-    
+
     static void insertTuple(String tableName,String[] attrAndValues) throws Exception {
 
 
@@ -163,7 +145,7 @@ public class DynamoDBGeneralOperations {
         System.out.print("\n");
 
         Map item = new HashMap();
-        
+
         int attrSize = attrAndValues.length;
 
         for(int i=0; i<attrSize;i+=2){
@@ -173,6 +155,58 @@ public class DynamoDBGeneralOperations {
         PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
         PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
         System.out.println("Insertion result: " + putItemResult);
+    }
+
+    static int estimateCost(BigInteger estimate){
+
+        /*QuerySpec spec = new QuerySpec()
+                .withKeyConditionExpression(PRIMARY_KEY + " < :v_id")
+                .withScanIndexForward(false)
+                .withValueMap(new ValueMap()
+                        .withString(":v_id", estimate.toString()))
+                .withConsistentRead(true);
+        spec.setMaxResultSize(10);*/
+
+
+        Map<String, AttributeValue> expressionAttributeValues =
+                new HashMap<>();
+        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
+
+        Map<String, AttributeValue> expressionHigherAttributeValues =
+                new HashMap<>();
+        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
+
+        QueryRequest queryRequest = new QueryRequest()
+                .withFilterExpression(PRIMARY_KEY+" < :val")
+                .withScanIndexForward(false)
+                .withExpressionAttributeValues(expressionAttributeValues)
+                .withConsistentRead(true)
+                .withLimit(10);
+
+        QueryResult result = dynamoDB.query(queryRequest);
+
+        QueryRequest queryHigherRequest = new QueryRequest()
+                .withFilterExpression(PRIMARY_KEY+" > :val")
+                .withScanIndexForward(false)
+                .withExpressionAttributeValues(expressionHigherAttributeValues)
+                .withConsistentRead(true)
+                .withLimit(10);
+
+        QueryResult higherResult = dynamoDB.query(queryHigherRequest);
+
+        for (Map<String, AttributeValue> item : result.getItems()) {
+            for (String key: item.keySet()){
+                System.out.println(key);
+            }
+        }
+
+        for (Map<String, AttributeValue> item : higherResult.getItems()) {
+            for (String key: item.keySet()){
+                System.out.println(key);
+            }
+        }
+
+        return 0;
     }
 }
     

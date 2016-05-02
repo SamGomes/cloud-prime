@@ -5,7 +5,6 @@
 export CLASSPATH=./WebServerCode/instrumented/instrumentedOutput:./awsJavaSDK/lib/aws-java-sdk-1.10.69.jar:./awsJavaSDK/third-party/lib/*:.
 
 
-javac *.java
 
 javac  -source 1.4 ./WebServerCode/instrumented/*.java -d ./WebServerCode/instrumented/output/
 

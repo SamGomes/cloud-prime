@@ -1,4 +1,5 @@
 import java.io.*;
+import java.math.BigInteger;
 import java.net.*;
 import java.util.*;
 
@@ -72,8 +73,9 @@ public class EC2LoadBalancer {
 				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 
 			  try{
-                    String machineIp = getBestMachineIp(0); //TODO: call cost estimator
-                    String url = "http://"+machineIp+":8000/f.html?n="+map.get("n");
+				  	BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
+                    String machineIp = getBestMachineIp(numberToBeFactored); //TODO: call cost estimator
+                    String url = "http://"+machineIp+":8000/f.html?n="+numberToBeFactored;
 
 			        //String url = "http://"+instances.get(next).getPublicIpAddress()+":8000/f.html?n="+map.get("n");
 			        /*System.out.print("Next id: "+next+"\n");
@@ -83,12 +85,12 @@ public class EC2LoadBalancer {
 			            next += 1;
 			        } */
 
-                    String test = DynamoDBGeneralOperations.queryTable("MSSCentralTable","numberToBeFactored",numberToBeFactored,"EQ").get(0).get("cost").getS();
+                    //String test = DynamoDBWebServerGeneralOperations.queryTable("MSSCentralTable","numberToBeFactored",numberToBeFactored,"EQ").get(0).get("cost").getS();
 
-                    System.out.print("test: "+test+"\n");
+                    //System.out.print("test: "+test+"\n");
 
 
-					System.out.print(url+"\n");
+					//System.out.print(url+"\n");
 					HttpClient client = HttpClientBuilder.create().build();
 					HttpGet request = new HttpGet(url);
 
@@ -133,10 +135,13 @@ public class EC2LoadBalancer {
         System.out.println("Running instances: "+instances.size());
     }
 
-    public static String getBestMachineIp(int costEstimation){
+    public static String getBestMachineIp(BigInteger costEstimation){
         String result = "none";
         updateRunningInstances(); //update running instances
-        HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances); //TODO: get the current load of instances from MSS
+
+        DynamoDBGeneralOperations.estimateCost(costEstimation);
+
+        /*HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances); //TODO: get the current load of instances from MSS
 
         for (Map.Entry<String,Double> entry: instanceLoad.entrySet()){
             if (entry.getValue() + costEstimation < THRESHOLD){ //instance can process the request
@@ -148,6 +153,7 @@ public class EC2LoadBalancer {
         }
         // if result = "none" -> put the request on hold
         // or launch another instance (?)
+        */
         return result;
     }
 }

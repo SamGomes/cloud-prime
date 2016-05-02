@@ -15,35 +15,20 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
+import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.amazonaws.services.dynamodbv2.model.ComparisonOperator;
-import com.amazonaws.services.dynamodbv2.model.Condition;
-import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
-import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
-import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
-import com.amazonaws.services.dynamodbv2.model.KeyType;
-import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
-import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
-import com.amazonaws.services.dynamodbv2.model.PutItemResult;
-import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
-import com.amazonaws.services.dynamodbv2.model.ScanRequest;
-import com.amazonaws.services.dynamodbv2.model.ScanResult;
-import com.amazonaws.services.dynamodbv2.model.TableDescription;
+import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
 
 
-public class DynamoDBGeneralOperations {
+public class DynamoDBWebServerGeneralOperations {
 
     /*
      * Before running the code:
@@ -74,6 +59,9 @@ public class DynamoDBGeneralOperations {
      */
 
     static AmazonDynamoDBClient dynamoDB;
+    private static final String TABLE_NAME = "MSSCentralTable";
+    private static final String PRIMARY_KEY = "numberToBeFactored";
+    private static final String COST_ATTRIBUTE = "cost";
     
      
 
@@ -166,6 +154,57 @@ public class DynamoDBGeneralOperations {
         PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
         PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
         System.out.println("Insertion result: " + putItemResult);
+    }
+
+    static int estimateCost(BigInteger estimate){
+
+        /*QuerySpec spec = new QuerySpec()
+                .withKeyConditionExpression(PRIMARY_KEY + " < :v_id")
+                .withScanIndexForward(false)
+                .withValueMap(new ValueMap()
+                        .withString(":v_id", estimate.toString()))
+                .withConsistentRead(true);
+        spec.setMaxResultSize(10);*/
+
+        Map<String, AttributeValue> expressionAttributeValues =
+                new HashMap<>();
+        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
+
+        Map<String, AttributeValue> expressionHigherAttributeValues =
+                new HashMap<>();
+        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
+
+        QueryRequest queryRequest = new QueryRequest()
+                .withFilterExpression(PRIMARY_KEY+" < :val")
+                .withScanIndexForward(false)
+                .withExpressionAttributeValues(expressionAttributeValues)
+                .withConsistentRead(true)
+                .withLimit(10);
+
+        QueryResult result = dynamoDB.query(queryRequest);
+
+        QueryRequest queryHigherRequest = new QueryRequest()
+                .withFilterExpression(PRIMARY_KEY+" > :val")
+                .withScanIndexForward(false)
+                .withExpressionAttributeValues(expressionHigherAttributeValues)
+                .withConsistentRead(true)
+                .withLimit(10);
+
+        QueryResult higherResult = dynamoDB.query(queryHigherRequest);
+
+        for (Map<String, AttributeValue> item : result.getItems()) {
+            for (String key: item.keySet()){
+                System.out.println(key);
+            }
+        }
+
+        for (Map<String, AttributeValue> item : higherResult.getItems()) {
+            for (String key: item.keySet()){
+                System.out.println(key);
+            }
+        }
+
+        return 0;
     }
 }
     

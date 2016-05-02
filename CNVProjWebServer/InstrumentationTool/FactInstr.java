@@ -8,7 +8,7 @@ import java.util.*;
 
 public class FactInstr {
 
-    static DynamoDBGeneralOperations dbgo;
+    static DynamoDBWebServerGeneralOperations dbgo;
 
 
 
