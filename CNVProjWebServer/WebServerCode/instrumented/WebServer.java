@@ -1,22 +1,25 @@
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.sun.net.httpserver.Headers;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
 
-    
 import java.io.*;
 import java.math.BigInteger;
-import java.net.*;
-import java.util.HashMap;
-
-import com.sun.net.httpserver.*;
-
- 
-import java.util.Date;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 
 public class WebServer{
  
 
 	private static String myIP;
+    private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
 
  	private static DynamoDBWebServerGeneralOperations dbgo;
 
@@ -28,6 +31,7 @@ public class WebServer{
 		myIP = InetAddress.getLocalHost().getHostAddress();
 		
 		dbgo.createTable("MSSCentralTable", "numberToBeFactored",new String[] {"cost"});
+		dbgo.createTable(INSTANCE_LOAD_TABLE_NAME, "instanceId",new String[] {"load"});
 
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
@@ -56,6 +60,8 @@ public class WebServer{
 		System.out.println("date: "+formatedDate);
 		try {
 			dbgo.insertTuple("MSSCentralTable", new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored), "cost", line});
+            Map<String, AttributeValue> instanceLoadTuple = DynamoDBWebServerGeneralOperations.
+                    getInstanceTuple(INSTANCE_LOAD_TABLE_NAME, )
 		}catch(Exception e){
 			e.printStackTrace();
 		}

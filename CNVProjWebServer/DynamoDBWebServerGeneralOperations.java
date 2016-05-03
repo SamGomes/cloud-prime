@@ -15,9 +15,6 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-import java.math.BigInteger;
-import java.util.HashMap;
-import java.util.Map;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
@@ -26,6 +23,10 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
+
+import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.Map;
 
 
 public class DynamoDBWebServerGeneralOperations {
@@ -62,8 +63,8 @@ public class DynamoDBWebServerGeneralOperations {
     private static final String TABLE_NAME = "MSSCentralTable";
     private static final String PRIMARY_KEY = "numberToBeFactored";
     private static final String COST_ATTRIBUTE = "cost";
-    
-     
+    private static final String INSTACE_LOAD_TABLE_NAME = "MSS Instance Load";
+    private static final String INSTANCE_PRIMARY_KEY = "instanceId";
 
     static void init() throws Exception {
 
@@ -154,6 +155,30 @@ public class DynamoDBWebServerGeneralOperations {
         PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
         PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
         System.out.println("Insertion result: " + putItemResult);
+    }
+
+    static Map<String,AttributeValue> getInstanceTuple(String tableName,String instance) throws Exception {
+
+        Map<String, AttributeValue> instanceLoadTuple = null;
+
+        Condition hashKeyCondition = new Condition()
+                .withComparisonOperator(ComparisonOperator.EQ.toString())
+                .withAttributeValueList(new AttributeValue().withS(instance));
+
+        Map<String, Condition> keyConditions = new HashMap<>();
+        keyConditions.put(INSTANCE_PRIMARY_KEY, hashKeyCondition);
+        //keyConditions.put("cost", rangeKeyCondition);
+
+        QueryRequest queryRequest = new QueryRequest()
+                .withTableName(TABLE_NAME)
+                .withKeyConditions(keyConditions)
+                .withLimit(1);
+
+        QueryResult result = dynamoDB.query(queryRequest);
+        if (result.getCount() > 0){
+            instanceLoadTuple = result.getItems().get(0);
+        }
+        return instanceLoadTuple;
     }
 
     static int estimateCost(BigInteger estimate){

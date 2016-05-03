@@ -1,3 +1,4 @@
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.ec2.model.Instance;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -16,9 +17,7 @@ import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 public class EC2LoadBalancer {
 
@@ -27,7 +26,9 @@ public class EC2LoadBalancer {
     private static int TIME_TO_REFRESH_INSTANCES = 5000;
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
-    private static final double THRESHOLD = 0.5; //TODO: set a meaningful value
+    private static final BigInteger THRESHOLD = new BigInteger("2300"); //TODO: set a meaningful value
+    private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
+    private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
  
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -79,48 +80,44 @@ public class EC2LoadBalancer {
 				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 
 			  try{
-				  	BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
-                    String machineIp = getBestMachineIp(numberToBeFactored); //TODO: call cost estimator
-                    String url = "http://"+machineIp+":8000/f.html?n="+numberToBeFactored;
+                  BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
+                  Instance instance = getBestMachineIp(numberToBeFactored);
+                  if (instance == null){
+                      System.out.println("Could not find any instance to serve the request");
+                  }else{
+                    System.out.println(instance.getInstanceId());
+                  }
+                  String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
 
-			        //String url = "http://"+instances.get(next).getPublicIpAddress()+":8000/f.html?n="+map.get("n");
-			        /*System.out.print("Next id: "+next+"\n");
-			        if (next >= (instances.size()-1)){
-			            next = 0;
-			        }else{
-			            next += 1;
-			        } */
+                  //TODO: method that update the instance load
+                  //Map<String, AttributeValue> instanceLoad = DynamoDBWebServerGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,instance.getInstanceId());
+                  //int currentLoad = Integer.parseInt(instanceLoad.get(instance.getInstanceId()).getS());
+                  //DynamoDBWebServerGeneralOperations.updateInstanceLoad(INSTANCE_LOAD_TABLE_NAME, currentLoad+0);
 
-                    //String test = DynamoDBWebServerGeneralOperations.queryTable("MSSCentralTable","numberToBeFactored",numberToBeFactored,"EQ").get(0).get("cost").getS();
+                  HttpClient client = HttpClientBuilder.create().build();
+                  HttpGet request = new HttpGet(url);
 
-                    //System.out.print("test: "+test+"\n");
+                  HttpResponse response = client.execute(request);
+                  System.out.println("Response Code : "
+                          + response.getStatusLine().getStatusCode());
 
+                  BufferedReader rd = new BufferedReader(
+                          new InputStreamReader(response.getEntity().getContent(),StandardCharsets.UTF_8));
 
-					//System.out.print(url+"\n");
-					HttpClient client = HttpClientBuilder.create().build();
-					HttpGet request = new HttpGet(url);
+                  StringBuilder result = new StringBuilder();
+                  String line;
+                  while ((line = rd.readLine()) != null) {
+                      result.append(line);
+                  }
 
-					HttpResponse response = client.execute(request);
-					System.out.println("Response Code : " 
-				                + response.getStatusLine().getStatusCode());
-	
-					BufferedReader rd = new BufferedReader(
-						new InputStreamReader(response.getEntity().getContent(),StandardCharsets.UTF_8));
-	
-					StringBuilder result = new StringBuilder();
-					String line;
-					while ((line = rd.readLine()) != null) {
-						result.append(line);
-					}
-				  
-			        exchange.sendResponseHeaders(200, result.length());
-			        OutputStream os = exchange.getResponseBody();
-			        os.write(result.toString().getBytes());
-			        os.close();
-			        
-		        }catch(Exception e){}
-			}
-		}).start();
+                  exchange.sendResponseHeaders(200, result.length());
+                  OutputStream os = exchange.getResponseBody();
+                  os.write(result.toString().getBytes());
+                  os.close();
+
+              }catch(Exception e){}
+            }
+        }).start();
         }
     }
 
@@ -141,8 +138,8 @@ public class EC2LoadBalancer {
         System.out.println("Running instances: "+instances.size());
     }
 
-    public static String getBestMachineIp(BigInteger costEstimation){
-        String result = "none";
+    public static Instance getBestMachineIp(BigInteger costEstimation){
+        Instance result = null;
         updateRunningInstances(); //update running instances
 
         BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
@@ -150,19 +147,38 @@ public class EC2LoadBalancer {
         System.out.println("Estimated cost "+response.toString());
 
         //TODO: get the current load of instances from MSS
-        /*HashMap<String, Double> instanceLoad = getRunningInstancesLoad(instances);
+/*        HashMap<String, Integer> instanceLoad = getRunningInstancesLoad(instances);
 
-        for (Map.Entry<String,Double> entry: instanceLoad.entrySet()){
-            if (entry.getValue() + costEstimation < THRESHOLD){ //instance can process the request
+        for (Map.Entry<String,Integer> entry: instanceLoad.entrySet()){
+            //instance can process the request
+            if (BigInteger.valueOf(entry.getValue()).add(costEstimation).compareTo(THRESHOLD) == -1){
                 //TODO: update instance load
-                return instances.get(entry.getKey()).getPublicIpAddress(); // return instance public ip
+                return instances.get(entry.getKey()); // return instance
             } else {
+                pendingRequests.add()
                 //continue to check if other instances can process the request
             }
+        }*/
+
+        for (Map.Entry<String,Instance> entry: instances.entrySet()){
+            Map<String, AttributeValue> instanceLoad = null;
+            try {
+                instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
+                //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
+                BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
+
+                if(currentLoad.add(costEstimation).compareTo(THRESHOLD) == -1){
+                    return entry.getValue();
+                }else{
+                    //pendingRequests.add(); Add to pending list and try later
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
         }
         // if result = "none" -> put the request on hold
         // or launch another instance (?)
-        */
         return result;
     }
 }
