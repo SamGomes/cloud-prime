@@ -19,7 +19,7 @@ public class WebServer{
  
 
 	private static String myIP;
-    private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
+    private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
 
  	private static DynamoDBWebServerGeneralOperations dbgo;
 
@@ -60,8 +60,11 @@ public class WebServer{
 		System.out.println("date: "+formatedDate);
 		try {
 			dbgo.insertTuple("MSSCentralTable", new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored), "cost", line});
-            Map<String, AttributeValue> instanceLoadTuple = DynamoDBWebServerGeneralOperations.
-                    getInstanceTuple(INSTANCE_LOAD_TABLE_NAME, )
+			dbgo.insertTuple("MSSInstanceLoad", new String[]{"instanceId", myIP,"load","6795"});
+//
+//			Map instanceLoadTuple = DynamoDBWebServerGeneralOperations.
+//                    getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,"");
+
 		}catch(Exception e){
 			e.printStackTrace();
 		}

@@ -231,20 +231,40 @@ public class DynamoDBGeneralOperations {
         ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
 
         try{
+
             Map<String, AttributeValue> expressionAttributeValues =
                     new HashMap<>();
             expressionAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
+
+            ScanRequest scanRequest = new ScanRequest()
+                    .withTableName(TABLE_NAME)
+                    .withFilterExpression("numberToBeFactored = :val")
+                    .withExpressionAttributeValues(expressionAttributeValues);
+
+            ScanResult equalityValue = dynamoDB.scan(scanRequest);
+
+            List<Map<String,AttributeValue>> listValues = equalityValue.getItems();
+
+            if(listValues.size()!=0){
+                return new BigInteger(listValues.get(0).get(COST_ATTRIBUTE).getS());
+            }
+
+
+
+            Map<String, AttributeValue> expressionLowerAttributeValues =
+                    new HashMap<>();
+            expressionLowerAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
 
             Map<String, AttributeValue> expressionHigherAttributeValues =
                     new HashMap<>();
             expressionHigherAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
 
-            ScanRequest scanRequest = new ScanRequest()
+            ScanRequest scanLowerRequest = new ScanRequest()
                     .withTableName(TABLE_NAME)
                     .withFilterExpression("numberToBeFactored < :val")
                     .withExpressionAttributeValues(expressionAttributeValues);
 
-            ScanResult lowerClosestValue = dynamoDB.scan(scanRequest);
+            ScanResult lowerClosestValue = dynamoDB.scan(scanLowerRequest);
 
             ScanRequest scanHigherRequest = new ScanRequest()
                     .withTableName(TABLE_NAME)
