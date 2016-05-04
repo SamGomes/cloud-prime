@@ -183,14 +183,6 @@ public class DynamoDBWebServerGeneralOperations {
 
     static int estimateCost(BigInteger estimate){
 
-        /*QuerySpec spec = new QuerySpec()
-                .withKeyConditionExpression(PRIMARY_KEY + " < :v_id")
-                .withScanIndexForward(false)
-                .withValueMap(new ValueMap()
-                        .withString(":v_id", estimate.toString()))
-                .withConsistentRead(true);
-        spec.setMaxResultSize(10);*/
-
         Map<String, AttributeValue> expressionAttributeValues =
                 new HashMap<>();
         expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));

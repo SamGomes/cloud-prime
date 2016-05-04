@@ -20,6 +20,10 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
+import com.amazonaws.services.cloudwatch.model.Datapoint;
+import com.amazonaws.services.cloudwatch.model.Dimension;
+import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
+import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
@@ -83,7 +87,6 @@ public class DynamoDBGeneralOperations {
         AWSCredentials credentials;
 
         credentials = new ProfileCredentialsProvider().getCredentials();
-
         dynamoDB = new AmazonDynamoDBClient(credentials);
         Region usWest2 = Region.getRegion(Regions.US_WEST_2);
         dynamoDB.setRegion(usWest2);
@@ -249,8 +252,6 @@ public class DynamoDBGeneralOperations {
                 return new BigInteger(listValues.get(0).get(COST_ATTRIBUTE).getS());
             }
 
-
-
             Map<String, AttributeValue> expressionLowerAttributeValues =
                     new HashMap<>();
             expressionLowerAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
@@ -262,7 +263,7 @@ public class DynamoDBGeneralOperations {
             ScanRequest scanLowerRequest = new ScanRequest()
                     .withTableName(TABLE_NAME)
                     .withFilterExpression("numberToBeFactored < :val")
-                    .withExpressionAttributeValues(expressionAttributeValues);
+                    .withExpressionAttributeValues(expressionLowerAttributeValues);
 
             ScanResult lowerClosestValue = dynamoDB.scan(scanLowerRequest);
 
@@ -295,8 +296,7 @@ public class DynamoDBGeneralOperations {
 
         BigInteger[] array = new BigInteger[numbersFactorized.size()];
         array = numbersFactorized.toArray(array);
-        BigInteger result = calculateEstimatedCost(array, estimate);
-        return result;
+        return calculateEstimatedCost(array, estimate);
     }
 
     public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val){
@@ -337,6 +337,39 @@ public class DynamoDBGeneralOperations {
         }
 
         return finalCostRounded.toBigInteger();
+    }
+
+    static float getInstanceCPU(String instanceId){
+        double dpWAverage=0;
+        float overallCPUAverage=0;
+        long offsetInMilliseconds = 1000 * 10;
+        Dimension instanceDimension = new Dimension();
+        instanceDimension.setName("InstanceId");
+        String id = instanceId;
+
+        instanceDimension.setValue(id);
+        GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
+                .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
+                .withNamespace("AWS/EC2")
+                .withPeriod(60)
+                .withMetricName("CPUUtilization")
+                .withStatistics("Average")
+                .withDimensions(instanceDimension)
+                .withEndTime(new Date());
+        GetMetricStatisticsResult getMetricStatisticsResult =
+                EC2ASGeneralOperations.cloudWatch.getMetricStatistics(request);
+        List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
+
+        int datapointCount=0;
+        for (Datapoint dp : datapoints) {
+            datapointCount++;
+            dpWAverage += 1/datapointCount * dp.getAverage();
+        }
+
+        System.out.println(" CPU utilization for instance " + id + " = " + dpWAverage);
+        overallCPUAverage += dpWAverage;
+
+        return overallCPUAverage;
     }
 }
     

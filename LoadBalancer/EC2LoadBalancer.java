@@ -13,7 +13,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -26,7 +29,7 @@ public class EC2LoadBalancer {
     private static int TIME_TO_REFRESH_INSTANCES = 5000;
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
-    private static final BigInteger THRESHOLD = new BigInteger("2300"); //TODO: set a meaningful value
+    private static final BigDecimal THRESHOLD = new BigDecimal("2300"); //TODO: set a meaningful value
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
  
@@ -74,48 +77,47 @@ public class EC2LoadBalancer {
         new Thread(new Runnable(){
 
 			//@Override
-			public void run() {
-				Headers responseHeaders = exchange.getResponseHeaders();
-				responseHeaders.set("Content-Type", "text/html");
-				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
+            public void run() {
+                Headers responseHeaders = exchange.getResponseHeaders();
+                responseHeaders.set("Content-Type", "text/html");
+                HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 
-			  try{
-                  BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
-                  Instance instance = getBestMachineIp(numberToBeFactored);
-                  if (instance == null){
-                      System.out.println("Could not find any instance to serve the request");
-                  }else{
-                    System.out.println(instance.getInstanceId());
-                  }
-                  String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
+                BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
+                Instance instance = getBestMachineIp(numberToBeFactored);
+                if (instance == null){
+                    System.out.println("Could not find any instance to serve the request");
+                }else{
+                    try{
+                        System.out.println(instance.getInstanceId());
+                        String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
 
-                  //TODO: method that update the instance load
-                  //Map<String, AttributeValue> instanceLoad = DynamoDBWebServerGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,instance.getInstanceId());
-                  //int currentLoad = Integer.parseInt(instanceLoad.get(instance.getInstanceId()).getS());
-                  //DynamoDBWebServerGeneralOperations.updateInstanceLoad(INSTANCE_LOAD_TABLE_NAME, currentLoad+0);
+                        //TODO: method that update the instance load
+                        //Map<String, AttributeValue> instanceLoad = DynamoDBWebServerGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,instance.getInstanceId());
+                        //int currentLoad = Integer.parseInt(instanceLoad.get(instance.getInstanceId()).getS());
+                        //DynamoDBWebServerGeneralOperations.updateInstanceLoad(INSTANCE_LOAD_TABLE_NAME, currentLoad+0);
 
-                  HttpClient client = HttpClientBuilder.create().build();
-                  HttpGet request = new HttpGet(url);
+                        HttpClient client = HttpClientBuilder.create().build();
+                        HttpGet request = new HttpGet(url);
 
-                  HttpResponse response = client.execute(request);
-                  System.out.println("Response Code : "
-                          + response.getStatusLine().getStatusCode());
+                        HttpResponse response = client.execute(request);
+                        System.out.println("Response Code : "
+                                + response.getStatusLine().getStatusCode());
 
-                  BufferedReader rd = new BufferedReader(
-                          new InputStreamReader(response.getEntity().getContent(),StandardCharsets.UTF_8));
+                        BufferedReader rd = new BufferedReader(
+                                new InputStreamReader(response.getEntity().getContent(),StandardCharsets.UTF_8));
 
-                  StringBuilder result = new StringBuilder();
-                  String line;
-                  while ((line = rd.readLine()) != null) {
-                      result.append(line);
-                  }
+                        StringBuilder result = new StringBuilder();
+                        String line;
+                        while ((line = rd.readLine()) != null) {
+                            result.append(line);
+                        }
 
-                  exchange.sendResponseHeaders(200, result.length());
-                  OutputStream os = exchange.getResponseBody();
-                  os.write(result.toString().getBytes());
-                  os.close();
-
-              }catch(Exception e){}
+                        exchange.sendResponseHeaders(200, result.length());
+                        OutputStream os = exchange.getResponseBody();
+                        os.write(result.toString().getBytes());
+                        os.close();
+                    }catch(Exception e){}
+                }
             }
         }).start();
         }
@@ -140,34 +142,23 @@ public class EC2LoadBalancer {
 
     public static Instance getBestMachineIp(BigInteger costEstimation){
         Instance result = null;
+        float currentCPULoad = 0;
         updateRunningInstances(); //update running instances
 
         BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
         //BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
         System.out.println("Estimated cost "+response.toString());
 
-        //TODO: get the current load of instances from MSS
-/*        HashMap<String, Integer> instanceLoad = getRunningInstancesLoad(instances);
-
-        for (Map.Entry<String,Integer> entry: instanceLoad.entrySet()){
-            //instance can process the request
-            if (BigInteger.valueOf(entry.getValue()).add(costEstimation).compareTo(THRESHOLD) == -1){
-                //TODO: update instance load
-                return instances.get(entry.getKey()); // return instance
-            } else {
-                pendingRequests.add()
-                //continue to check if other instances can process the request
-            }
-        }*/
-
         for (Map.Entry<String,Instance> entry: instances.entrySet()){
             Map<String, AttributeValue> instanceLoad = null;
             try {
-                instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
+                //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
                 //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
-                BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
-
-                if(currentLoad.add(costEstimation).compareTo(THRESHOLD) == -1){
+                //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
+                currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
+                BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
+                        new MathContext(3, RoundingMode.HALF_EVEN));
+                if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
                     return entry.getValue();
                 }else{
                     //pendingRequests.add(); Add to pending list and try later
@@ -175,7 +166,6 @@ public class EC2LoadBalancer {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-
         }
         // if result = "none" -> put the request on hold
         // or launch another instance (?)

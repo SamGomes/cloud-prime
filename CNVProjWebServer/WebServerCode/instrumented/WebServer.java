@@ -1,4 +1,3 @@
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -12,7 +11,6 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.Map;
 
 
 public class WebServer{
@@ -31,7 +29,7 @@ public class WebServer{
 		myIP = InetAddress.getLocalHost().getHostAddress();
 		
 		dbgo.createTable("MSSCentralTable", "numberToBeFactored",new String[] {"cost"});
-		dbgo.createTable(INSTANCE_LOAD_TABLE_NAME, "instanceId",new String[] {"load"});
+		///dbgo.createTable(INSTANCE_LOAD_TABLE_NAME, "instanceId",new String[] {"load"});
 
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
@@ -60,7 +58,7 @@ public class WebServer{
 		System.out.println("date: "+formatedDate);
 		try {
 			dbgo.insertTuple("MSSCentralTable", new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored), "cost", line});
-			dbgo.insertTuple("MSSInstanceLoad", new String[]{"instanceId", myIP,"load","6795"});
+			//dbgo.insertTuple("MSSInstanceLoad", new String[]{"instanceId", myIP,"load","6795"});
 //
 //			Map instanceLoadTuple = DynamoDBWebServerGeneralOperations.
 //                    getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,"");
