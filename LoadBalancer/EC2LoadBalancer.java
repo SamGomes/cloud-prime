@@ -30,9 +30,10 @@ public class EC2LoadBalancer {
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
     private static final BigDecimal THRESHOLD = new BigDecimal("2300"); //TODO: set a meaningful value
+    private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
+
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
-    private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
- 
+
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         LoadBalancerIp = InetAddress.getLocalHost().getHostAddress();
@@ -44,7 +45,7 @@ public class EC2LoadBalancer {
     }
 
     public static void createInstanceList(){
-    	
+
     	try{
         	EC2LBGeneralOperations.init();
             DynamoDBGeneralOperations.init();
@@ -56,7 +57,7 @@ public class EC2LoadBalancer {
 
     	}
     }
- 
+
     public static HashMap queryToMap(String query){
  	    HashMap result = new HashMap();
  	    String[] params = query.split("&");
@@ -70,56 +71,56 @@ public class EC2LoadBalancer {
  	    }
  	    return result;
  	}
-    
+
     static class MyHandler implements HttpHandler {
         public void handle(final HttpExchange exchange) throws IOException {
 
-        new Thread(new Runnable(){
+            new Thread(new Runnable(){
 
-			//@Override
-            public void run() {
-                Headers responseHeaders = exchange.getResponseHeaders();
-                responseHeaders.set("Content-Type", "text/html");
-                HashMap map = queryToMap(exchange.getRequestURI().getQuery());
+                //@Override
+                public void run() {
+                    Headers responseHeaders = exchange.getResponseHeaders();
+                    responseHeaders.set("Content-Type", "text/html");
+                    HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 
-                BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
-                Instance instance = getBestMachineIp(numberToBeFactored);
-                if (instance == null){
-                    System.out.println("Could not find any instance to serve the request");
-                }else{
-                    try{
-                        System.out.println(instance.getInstanceId());
-                        String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
+                    BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
+                    Instance instance = getBestMachineIp(numberToBeFactored);
+                    if (instance == null){
+                        System.out.println("Could not find any instance to serve the request");
+                    }else{
+                        try{
+                            System.out.println(instance.getInstanceId());
+                            String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
 
-                        //TODO: method that update the instance load
-                        //Map<String, AttributeValue> instanceLoad = DynamoDBWebServerGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,instance.getInstanceId());
-                        //int currentLoad = Integer.parseInt(instanceLoad.get(instance.getInstanceId()).getS());
-                        //DynamoDBWebServerGeneralOperations.updateInstanceLoad(INSTANCE_LOAD_TABLE_NAME, currentLoad+0);
+                            //TODO: method that update the instance load
+                            //Map<String, AttributeValue> instanceLoad = DynamoDBWebServerGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,instance.getInstanceId());
+                            //int currentLoad = Integer.parseInt(instanceLoad.get(instance.getInstanceId()).getS());
+                            //DynamoDBWebServerGeneralOperations.updateInstanceLoad(INSTANCE_LOAD_TABLE_NAME, currentLoad+0);
 
-                        HttpClient client = HttpClientBuilder.create().build();
-                        HttpGet request = new HttpGet(url);
+                            HttpClient client = HttpClientBuilder.create().build();
+                            HttpGet request = new HttpGet(url);
 
-                        HttpResponse response = client.execute(request);
-                        System.out.println("Response Code : "
-                                + response.getStatusLine().getStatusCode());
+                            HttpResponse response = client.execute(request);
+                            System.out.println("Response Code : "
+                                    + response.getStatusLine().getStatusCode());
 
-                        BufferedReader rd = new BufferedReader(
-                                new InputStreamReader(response.getEntity().getContent(),StandardCharsets.UTF_8));
+                            BufferedReader rd = new BufferedReader(
+                                    new InputStreamReader(response.getEntity().getContent(),StandardCharsets.UTF_8));
 
-                        StringBuilder result = new StringBuilder();
-                        String line;
-                        while ((line = rd.readLine()) != null) {
-                            result.append(line);
-                        }
+                            StringBuilder result = new StringBuilder();
+                            String line;
+                            while ((line = rd.readLine()) != null) {
+                                result.append(line);
+                            }
 
-                        exchange.sendResponseHeaders(200, result.length());
-                        OutputStream os = exchange.getResponseBody();
-                        os.write(result.toString().getBytes());
-                        os.close();
-                    }catch(Exception e){}
+                            exchange.sendResponseHeaders(200, result.length());
+                            OutputStream os = exchange.getResponseBody();
+                            os.write(result.toString().getBytes());
+                            os.close();
+                        }catch(Exception e){}
+                    }
                 }
-            }
-        }).start();
+            }).start();
         }
     }
 
@@ -145,17 +146,16 @@ public class EC2LoadBalancer {
         float currentCPULoad = 0;
         updateRunningInstances(); //update running instances
 
-        BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
-        //BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
+        //BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
+        BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
         System.out.println("Estimated cost "+response.toString());
 
         for (Map.Entry<String,Instance> entry: instances.entrySet()){
-            Map<String, AttributeValue> instanceLoad = null;
+            String instanceLoad;
             try {
                 //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
                 //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
                 //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
-
                 currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
                 BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
                         new MathContext(3, RoundingMode.HALF_EVEN));
@@ -168,9 +168,9 @@ public class EC2LoadBalancer {
                 e.printStackTrace();
             }
         }
-
         // if result = "none" -> put the request on hold
         // or launch another instance (?)
         return result;
     }
 }
+

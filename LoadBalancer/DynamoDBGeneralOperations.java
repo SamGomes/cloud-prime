@@ -367,6 +367,7 @@ public class DynamoDBGeneralOperations {
 
         System.out.println(" CPU utilization for instance " + id + " = " + dpWAverage);
         overallCPUAverage += dpWAverage;
+
         return overallCPUAverage;
     }
 }
