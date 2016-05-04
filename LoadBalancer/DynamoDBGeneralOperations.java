@@ -25,8 +25,10 @@ import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
+
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -75,7 +77,7 @@ public class DynamoDBGeneralOperations {
     private static int DECIMAL_PlACES = 6;
     static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
 
-
+    private static Table table;
     static void init() throws Exception {
 
         System.out.println("init");
@@ -92,35 +94,6 @@ public class DynamoDBGeneralOperations {
         dynamoDB.setRegion(usWest2);
     }
 
-    static void createTable(String tableName,String keyAttr,String[] attributes) throws Exception {
-
-        System.out.print("createTable! tableName: "+tableName+"  ,keyAttr: "+keyAttr+" attributes: ");
-
-        for(int i=0;i<attributes.length;i++){
-            System.out.print(" "+attributes[i]+" ,");
-        }
-        System.out.print("\n");
-
-        // Create table if it does not exist yet
-
-        if (Tables.doesTableExist(dynamoDB, tableName)) {
-            System.out.println("Table " + tableName + " is already ACTIVE");
-        } else {
-            // Create a table with a primary hash key named 'name', which holds a string
-            CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
-                    .withKeySchema(new KeySchemaElement[]{new KeySchemaElement().withAttributeName(keyAttr).withKeyType(KeyType.HASH)})
-                    .withAttributeDefinitions(new AttributeDefinition[]{new AttributeDefinition().withAttributeName(keyAttr).withAttributeType(ScalarAttributeType.S)})
-                    .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(new Long(1)).withWriteCapacityUnits(new Long(1)));
-            TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
-            System.out.println("Created Table: " + createdTableDescription);
-
-            // Wait for it to become active
-
-            System.out.println("Waiting for " + tableName + " to become ACTIVE...");
-            Tables.awaitTableToBecomeActive(dynamoDB, tableName);
-        }
-
-    }
 
     static void describeTable(String tableName) throws Exception {
 
@@ -131,16 +104,17 @@ public class DynamoDBGeneralOperations {
         // System.out.println("Table Description: " + tableDescription);
     }
 
-    static void queryTable(String tableName,String attribute,Condition condition) throws Exception {
+    static QueryResult queryTable(String tableName,Map<String,Condition> conditions,int limit) throws Exception {
 
-        System.out.println("createTable! tableName: "+tableName+"  ,condition: "+condition+" attribute: "+attribute);
 
-        HashMap scanFilter = new HashMap();
 
-        scanFilter.put(attribute, condition);
-        ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-        ScanResult scanResult = dynamoDB.scan(scanRequest);
-        System.out.println("Result: " + scanResult);
+        QueryRequest queryRequest = new QueryRequest()
+                .withTableName(tableName)
+                .withKeyConditions(conditions)
+                .withLimit(limit);
+
+        QueryResult result = dynamoDB.query(queryRequest);
+        return result;
     }
 
     static void insertTuple(String tableName,String[] attrAndValues) throws Exception {
@@ -194,7 +168,9 @@ public class DynamoDBGeneralOperations {
 
         //TODO: Query with < and > operators and scan index forward
 
-        BigInteger response = BigInteger.valueOf(0);
+
+        ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
+
 
         Map<String, AttributeValue> lastEvaluatedKey = null;
         do {
@@ -205,29 +181,52 @@ public class DynamoDBGeneralOperations {
                         .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
 
                 Map<String, Condition> keyConditions = new HashMap<>();
-                keyConditions.put("numberToBeFactored", hashKeyCondition);
-                //keyConditions.put("cost", rangeKeyCondition);
+                keyConditions.put(PRIMARY_KEY, hashKeyCondition);
 
-                QueryRequest queryRequest = new QueryRequest()
-                        .withTableName(TABLE_NAME)
-                        .withKeyConditions(keyConditions)
-                        .withLimit(2);
+                //QueryResult equalityValue = queryTable(TABLE_NAME,keyConditions,1);
 
-                QueryResult result = dynamoDB.query(queryRequest);
-                for (Map<String, AttributeValue> item : result.getItems()) {
-                    AttributeValue value = item.get(PRIMARY_KEY);
-                    AttributeValue cost = item.get(COST_ATTRIBUTE);
-                    System.out.println(value.toString());
-                    System.out.println(cost.toString());
-                }
-                lastEvaluatedKey = result.getLastEvaluatedKey();
+//                List<Map<String,AttributeValue>> listValues = equalityValue.getItems();
+//
+//                if(listValues.size()!=0){
+//                    return new BigInteger(listValues.get(0).get(COST_ATTRIBUTE).getS());
+//                }
+
+//                hashKeyCondition = new Condition()
+//                        .withComparisonOperator(ComparisonOperator.GT.toString())
+//                        .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
+//
+//                keyConditions = new HashMap<>();
+//                keyConditions.put(PRIMARY_KEY, hashKeyCondition);
+
+                QueryResult higherValue = queryTable(TABLE_NAME,keyConditions,1);
+
+//                numbersFactorized.add(new BigInteger(higherValue.getItems().get(0).get(0).getS()));
+//
+//                hashKeyCondition = new Condition()
+//                        .withComparisonOperator(ComparisonOperator.LT.toString())
+//                        .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
+//
+//                keyConditions = new HashMap<>();
+//                keyConditions.put(COST_ATTRIBUTE, hashKeyCondition);
+//
+//                QueryResult lowerValue = queryTable(TABLE_NAME,keyConditions,1);
+//
+//                numbersFactorized.add(new BigInteger(lowerValue.getItems().get(0).get(0).getS()));
+//
+
+
             }catch (Exception e){
                 e.printStackTrace();
             }
         } while (lastEvaluatedKey != null);
 
-        return response;
+        BigInteger[] array = new BigInteger[numbersFactorized.size()];
+        array = numbersFactorized.toArray(array);
+        //BigInteger result = calculateEstimatedCost(array, estimate);
+        return new BigInteger("12345");
     }
+
+
 
     static BigInteger estimateCostScan(BigInteger estimate){
 
@@ -368,7 +367,6 @@ public class DynamoDBGeneralOperations {
 
         System.out.println(" CPU utilization for instance " + id + " = " + dpWAverage);
         overallCPUAverage += dpWAverage;
-
         return overallCPUAverage;
     }
 }

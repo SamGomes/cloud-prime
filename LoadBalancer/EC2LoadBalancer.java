@@ -155,6 +155,7 @@ public class EC2LoadBalancer {
                 //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
                 //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
                 //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
+
                 currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
                 BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
                         new MathContext(3, RoundingMode.HALF_EVEN));
@@ -167,6 +168,7 @@ public class EC2LoadBalancer {
                 e.printStackTrace();
             }
         }
+
         // if result = "none" -> put the request on hold
         // or launch another instance (?)
         return result;
