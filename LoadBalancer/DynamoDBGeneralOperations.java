@@ -356,7 +356,7 @@ public class DynamoDBGeneralOperations {
                 .withDimensions(instanceDimension)
                 .withEndTime(new Date());
         GetMetricStatisticsResult getMetricStatisticsResult =
-                EC2ASGeneralOperations.cloudWatch.getMetricStatistics(request);
+                EC2LBGeneralOperations.cloudWatch.getMetricStatistics(request);
         List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
 
         int datapointCount=0;

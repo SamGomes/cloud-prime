@@ -21,16 +21,19 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class EC2LoadBalancer {
 
 	private static HashMap<String,Instance> instances;
 	private static int next = 0;
-    private static int TIME_TO_REFRESH_INSTANCES = 5000;
+    private static int TIME_TO_REFRESH_INSTANCES = 20000;
+    private static int THREAD_SLEEP_TIME = 20 * 1000; //Time in milliseconds
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
     private static final BigDecimal THRESHOLD = new BigDecimal("2300"); //TODO: set a meaningful value
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
+    private static final String AMI_ID = "ami-83f206e3";
 
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
 
@@ -161,15 +164,33 @@ public class EC2LoadBalancer {
                         new MathContext(3, RoundingMode.HALF_EVEN));
                 if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
                     return entry.getValue();
-                }else{
-                    //pendingRequests.add(); Add to pending list and try later
                 }
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-        // if result = "none" -> put the request on hold
-        // or launch another instance (?)
+        /*
+        *  There are no instances available to process the request.
+        *  Another instance is launched and the request is sent
+        * */
+        if (result == null){
+            try {
+                // launch instance
+                Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
+                String state = newInstance.getState().getName();
+                while (!state.equals("running")){
+                    TimeUnit.SECONDS.sleep(5);
+                    System.out.println("waiting....");
+                    System.out.println("Current state: " + state);
+                    state = newInstance.getState().getName();
+                }
+                System.out.println("returning new instance");
+                return newInstance;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
         return result;
     }
 }

@@ -13,26 +13,16 @@
  * express or implied. See the License for the specific language governing
  * permissions and limitations under the License.
  */
-import java.util.*;
 
 import com.amazonaws.AmazonClientException;
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
-import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
-import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
-import com.amazonaws.services.ec2.model.DescribeInstancesResult;
-import com.amazonaws.services.ec2.model.RunInstancesRequest;
-import com.amazonaws.services.ec2.model.RunInstancesResult;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
-import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.Reservation;
-import com.amazonaws.services.cloudwatch.model.Dimension;
-import com.amazonaws.services.cloudwatch.model.Datapoint;
-import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
-import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
+import com.amazonaws.services.ec2.model.*;
+
+import java.util.*;
 
 public class EC2LBGeneralOperations {
 
@@ -108,32 +98,31 @@ public class EC2LBGeneralOperations {
         startTimer(); // Starts timer for refreshing instances
     }
 
-    static String startInstance( DescribeInstancesResult describeInstancesRequest,List<Reservation> reservations,ArrayList<Instance> instances,String role,String ami) throws Exception {
-        
-        
-        System.out.println("runningInstances: "+runningInstances+".");
-        
-         System.out.println("Starting a new instance.");
-        
-         RunInstancesRequest runInstancesRequest =
-            new RunInstancesRequest();
-        
-        
-         runInstancesRequest.withImageId(ami)
-                            .withInstanceType("t2.micro")
-                            .withMinCount(1)
-                            .withMaxCount(1)
-                            .withKeyName("CNV-lab-AWS")
-                            .withSecurityGroups("CNV-ssh+http")
-                            .withMonitoring(true);
-        
-         RunInstancesResult runInstancesResult =
-            ec2.runInstances(runInstancesRequest);
-         String newInstanceId = runInstancesResult.getReservation().getInstances()
-                                   .get(0).getInstanceId();
-         
-         runningInstances++;
-         return newInstanceId;
+    static Instance startInstance( DescribeInstancesResult describeInstancesRequest,List<Reservation> reservations,ArrayList<Instance> instances,String role,String ami) throws Exception {
+
+        System.out.println("runningInstances: " + runningInstances + ".");
+
+        System.out.println("Starting a new instance.");
+
+        RunInstancesRequest runInstancesRequest =
+                new RunInstancesRequest();
+
+
+        runInstancesRequest.withImageId(ami)
+                .withInstanceType("t2.micro")
+                .withMinCount(1)
+                .withMaxCount(1)
+                .withKeyName("CNV-lab-AWS")
+                .withSecurityGroups("CNV-ssh+http")
+                .withMonitoring(true);
+
+        RunInstancesResult runInstancesResult =
+                ec2.runInstances(runInstancesRequest);
+        Instance newInstanceId = runInstancesResult.getReservation().getInstances()
+                .get(0);
+
+        runningInstances++;
+        return newInstanceId;
     }
     
     static void terminateInstance(String instanceId, ArrayList instances) throws Exception {
@@ -195,5 +184,9 @@ public class EC2LBGeneralOperations {
      }
     public static void addLoadBalancerToExceptionList(String ip){
         LoadBalancerExpectionList.add(ip);
+    }
+
+    public static Instance getInstance(String id){
+        return runningInstancesArray.get(id);
     }
 }
