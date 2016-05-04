@@ -26,10 +26,12 @@ public class EC2LoadBalancer {
     private static int TIME_TO_REFRESH_INSTANCES = 5000;
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
+
     private static final BigInteger THRESHOLD = new BigInteger("2300"); //TODO: set a meaningful value
+    private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
+
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
-    private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
- 
+
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         LoadBalancerIp = InetAddress.getLocalHost().getHostAddress();
@@ -85,7 +87,7 @@ public class EC2LoadBalancer {
                   if (instance == null){
                       System.out.println("Could not find any instance to serve the request");
                   }else{
-                    System.out.println(instance.getInstanceId());
+                      System.out.println(instance.getInstanceId());
                   }
                   String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
 
@@ -142,32 +144,20 @@ public class EC2LoadBalancer {
         Instance result = null;
         updateRunningInstances(); //update running instances
 
-        BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
-        //BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
+        //BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
+        BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
         System.out.println("Estimated cost "+response.toString());
 
-        //TODO: get the current load of instances from MSS
-/*        HashMap<String, Integer> instanceLoad = getRunningInstancesLoad(instances);
 
-        for (Map.Entry<String,Integer> entry: instanceLoad.entrySet()){
-            //instance can process the request
-            if (BigInteger.valueOf(entry.getValue()).add(costEstimation).compareTo(THRESHOLD) == -1){
-                //TODO: update instance load
-                return instances.get(entry.getKey()); // return instance
-            } else {
-                pendingRequests.add()
-                //continue to check if other instances can process the request
-            }
-        }*/
-
+        //System.out.println("entryset: "+instances.entrySet());
         for (Map.Entry<String,Instance> entry: instances.entrySet()){
-            Map<String, AttributeValue> instanceLoad = null;
+            String instanceLoad;
             try {
-                instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
-                //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
-                BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
+                instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getPublicIpAddress()).get("load").getS();
+                System.out.println("il: "+instanceLoad);
+                BigInteger currentLoad = new BigInteger(instanceLoad);
 
-                if(currentLoad.add(costEstimation).compareTo(THRESHOLD) == -1){
+                if(currentLoad.add(DynamoDBGeneralOperations.estimateCost(costEstimation)).compareTo(THRESHOLD) == -1){
                     return entry.getValue();
                 }else{
                     //pendingRequests.add(); Add to pending list and try later
@@ -181,4 +171,6 @@ public class EC2LoadBalancer {
         // or launch another instance (?)
         return result;
     }
+
 }
+

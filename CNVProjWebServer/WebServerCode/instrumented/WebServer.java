@@ -60,7 +60,7 @@ public class WebServer{
 		System.out.println("date: "+formatedDate);
 		try {
 			dbgo.insertTuple("MSSCentralTable", new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored), "cost", line});
-			dbgo.insertTuple("MSSInstanceLoad", new String[]{"instanceId", myIP,"load","6795"});
+			dbgo.insertTuple("MSSInstanceLoad", new String[]{"instanceId", myIP,"load","1000"});
 //
 //			Map instanceLoadTuple = DynamoDBWebServerGeneralOperations.
 //                    getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,"");

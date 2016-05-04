@@ -4,8 +4,8 @@
     <list default="true" id="b2d4d58b-ad7a-43a5-8cc0-e0ce7a62f15b" name="Default" comment="Added function that queries DynamoDB for the">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/CNVProjWebServer/WebServerCode/instrumented/WebServer.java" afterPath="$PROJECT_DIR$/CNVProjWebServer/WebServerCode/instrumented/WebServer.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/CloudPrime.iml" afterPath="$PROJECT_DIR$/CloudPrime.iml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/LoadBalancer/DynamoDBGeneralOperations.java" afterPath="$PROJECT_DIR$/LoadBalancer/DynamoDBGeneralOperations.java" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/LoadBalancer/EC2LoadBalancer.java" afterPath="$PROJECT_DIR$/LoadBalancer/EC2LoadBalancer.java" />
     </list>
     <ignored path="CloudPrime.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -70,8 +70,8 @@
       <file leaf-file-name="EC2LoadBalancer.java" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/LoadBalancer/EC2LoadBalancer.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="550">
-              <caret line="140" column="43" selection-start-line="140" selection-start-column="27" selection-end-line="140" selection-end-column="43" />
+            <state relative-caret-position="140">
+              <caret line="143" column="31" selection-start-line="143" selection-start-column="31" selection-end-line="143" selection-end-column="31" />
               <folding />
             </state>
           </provider>
@@ -80,8 +80,8 @@
       <file leaf-file-name="WebServer.java" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/CNVProjWebServer/WebServerCode/instrumented/WebServer.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="144">
-              <caret line="49" column="8" selection-start-line="49" selection-start-column="8" selection-end-line="49" selection-end-column="8" />
+            <state relative-caret-position="594">
+              <caret line="62" column="92" selection-start-line="62" selection-start-column="92" selection-end-line="62" selection-end-column="92" />
               <folding />
             </state>
           </provider>
@@ -107,13 +107,26 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="DynamoDBGeneralOperations.java" pinned="false" current-in-tab="true">
+      <file leaf-file-name="DynamoDBGeneralOperations.java" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/LoadBalancer/DynamoDBGeneralOperations.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="374">
-              <caret line="248" column="83" selection-start-line="248" selection-start-column="83" selection-end-line="248" selection-end-column="83" />
+            <state relative-caret-position="162">
+              <caret line="166" column="0" selection-start-line="166" selection-start-column="0" selection-end-line="166" selection-end-column="0" />
               <folding>
-                <element signature="e#12637#12649#0" expanded="true" />
+                <element signature="imports" expanded="true" />
+                <element signature="e#11895#11907#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="DynamoDBWebServerGeneralOperations.java" pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/CNVProjWebServer/DynamoDBWebServerGeneralOperations.java">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="116">
+              <caret line="93" column="0" selection-start-line="93" selection-start-column="0" selection-end-line="93" selection-end-column="0" />
+              <folding>
+                <element signature="imports" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -149,10 +162,10 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/CNVProjWebServer/DynamoDBWebServerGeneralOperations.java" />
         <option value="$PROJECT_DIR$/LoadBalancer/EC2LoadBalancer.java" />
         <option value="$PROJECT_DIR$/CNVProjWebServer/WebServerCode/instrumented/WebServer.java" />
         <option value="$PROJECT_DIR$/LoadBalancer/DynamoDBGeneralOperations.java" />
+        <option value="$PROJECT_DIR$/CNVProjWebServer/DynamoDBWebServerGeneralOperations.java" />
       </list>
     </option>
   </component>
@@ -579,7 +592,7 @@
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3033226" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Capture Tool" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Designer" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
-      <window_info id="Project" active="true" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.1800539" sideWeight="0.670229" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.1800539" sideWeight="0.670229" order="0" side_tool="false" content_ui="combo" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="UI Designer" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
@@ -645,7 +658,8 @@
         <state relative-caret-position="2664">
           <caret line="175" column="21" selection-start-line="175" selection-start-column="21" selection-end-line="175" selection-end-column="21" />
           <folding>
-            <element signature="e#12637#12649#0" expanded="true" />
+            <element signature="imports" expanded="true" />
+            <element signature="e#11895#11907#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -663,7 +677,8 @@
         <state relative-caret-position="2592">
           <caret line="171" column="21" selection-start-line="171" selection-start-column="21" selection-end-line="171" selection-end-column="21" />
           <folding>
-            <element signature="e#12637#12649#0" expanded="true" />
+            <element signature="imports" expanded="true" />
+            <element signature="e#11895#11907#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -756,7 +771,8 @@
         <state relative-caret-position="0">
           <caret line="0" column="0" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#12637#12649#0" expanded="true" />
+            <element signature="imports" expanded="true" />
+            <element signature="e#11895#11907#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -802,7 +818,8 @@
         <state relative-caret-position="2250">
           <caret line="167" column="0" selection-start-line="167" selection-start-column="0" selection-end-line="167" selection-end-column="0" />
           <folding>
-            <element signature="e#12637#12649#0" expanded="true" />
+            <element signature="imports" expanded="true" />
+            <element signature="e#11895#11907#0" expanded="true" />
           </folding>
         </state>
       </provider>
@@ -842,16 +859,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="1411">
           <caret line="97" column="8" selection-start-line="97" selection-start-column="8" selection-end-line="97" selection-end-column="8" />
-          <folding>
-            <element signature="imports" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/CNVProjWebServer/DynamoDBWebServerGeneralOperations.java">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="170">
-          <caret line="36" column="68" selection-start-line="0" selection-start-column="0" selection-end-line="209" selection-end-column="4" />
           <folding>
             <element signature="imports" expanded="true" />
           </folding>
@@ -931,28 +938,39 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/CNVProjWebServer/WebServerCode/instrumented/WebServer.java">
+    <entry file="file://$PROJECT_DIR$/LoadBalancer/EC2LoadBalancer.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="144">
-          <caret line="49" column="8" selection-start-line="49" selection-start-column="8" selection-end-line="49" selection-end-column="8" />
+        <state relative-caret-position="140">
+          <caret line="143" column="31" selection-start-line="143" selection-start-column="31" selection-end-line="143" selection-end-column="31" />
           <folding />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/LoadBalancer/EC2LoadBalancer.java">
+    <entry file="file://$PROJECT_DIR$/CNVProjWebServer/WebServerCode/instrumented/WebServer.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="550">
-          <caret line="140" column="43" selection-start-line="140" selection-start-column="27" selection-end-line="140" selection-end-column="43" />
+        <state relative-caret-position="594">
+          <caret line="62" column="92" selection-start-line="62" selection-start-column="92" selection-end-line="62" selection-end-column="92" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/LoadBalancer/DynamoDBGeneralOperations.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="374">
-          <caret line="248" column="83" selection-start-line="248" selection-start-column="83" selection-end-line="248" selection-end-column="83" />
+        <state relative-caret-position="162">
+          <caret line="166" column="0" selection-start-line="166" selection-start-column="0" selection-end-line="166" selection-end-column="0" />
           <folding>
-            <element signature="e#12637#12649#0" expanded="true" />
+            <element signature="imports" expanded="true" />
+            <element signature="e#11895#11907#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/CNVProjWebServer/DynamoDBWebServerGeneralOperations.java">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="116">
+          <caret line="93" column="0" selection-start-line="93" selection-start-column="0" selection-end-line="93" selection-end-column="0" />
+          <folding>
+            <element signature="imports" expanded="true" />
           </folding>
         </state>
       </provider>
