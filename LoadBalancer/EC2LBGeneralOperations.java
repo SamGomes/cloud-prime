@@ -25,6 +25,7 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.model.*;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class EC2LBGeneralOperations {
 
@@ -47,7 +48,7 @@ public class EC2LBGeneralOperations {
     
     private static int runningInstances = 0;
     private static ArrayList<Instance> instances;
-    private static HashMap<String,Instance> runningInstancesArray;
+    private static ConcurrentHashMap<String,Instance> runningInstancesArray;
     private static ArrayList<String> LoadBalancerExpectionList;
     private static Timer timer = new Timer();
     private static DescribeInstancesResult describeInstancesRequest;
@@ -93,7 +94,7 @@ public class EC2LBGeneralOperations {
         cloudWatch.setEndpoint("monitoring.us-west-2.amazonaws.com"); 
 
         instances = new ArrayList<Instance>();
-        runningInstancesArray = new HashMap<>();
+        runningInstancesArray = new ConcurrentHashMap<>();
         LoadBalancerExpectionList = new ArrayList<String>();
 
         updateRunningInstances(); 
@@ -181,7 +182,7 @@ public class EC2LBGeneralOperations {
             }
         }
     }
-    public static HashMap<String,Instance> getRunningInstancesArray(){
+    public static ConcurrentHashMap<String,Instance> getRunningInstancesArray(){
         return runningInstancesArray;
      }
     public static void addLoadBalancerToExceptionList(String ip){

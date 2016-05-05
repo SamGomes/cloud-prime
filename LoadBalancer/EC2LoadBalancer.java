@@ -24,23 +24,26 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 public class EC2LoadBalancer {
 
-	private static HashMap<String,Instance> instances;
+	private static ConcurrentHashMap<String,Instance> instances;
 	private static int next = 0;
     private static int TIME_TO_REFRESH_INSTANCES = 20000;
     private static int THREAD_SLEEP_TIME = 20 * 1000; //Time in milliseconds
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
-    private static final BigDecimal THRESHOLD = new BigDecimal("2300"); //TODO: set a meaningful value
+    private static final BigDecimal THRESHOLD = new BigDecimal("2300777"); //TODO: set a meaningful value
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
     private static final String AMI_ID = "ami-83f206e3";
 
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
 
-    private static HashMap<String, BigInteger> machineCurrentMetric = new HashMap<>();
+    private static ConcurrentHashMap<String, BigInteger> machineCurrentMetric = new ConcurrentHashMap<>();
+
+    private static boolean isLocked = false;
 
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -90,16 +93,21 @@ public class EC2LoadBalancer {
                     Headers responseHeaders = exchange.getResponseHeaders();
                     responseHeaders.set("Content-Type", "text/html");
                     HashMap map = queryToMap(exchange.getRequestURI().getQuery());
- 
+
                     BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
                     HashMap<Instance, BigInteger> bestMachine = getBestMachineIp(numberToBeFactored);
                     Instance instance = (Instance) bestMachine.keySet().toArray()[0];
                     BigInteger metric = bestMachine.get(instance);
+
                     if (instance == null){
                         System.out.println("Could not find any instance to serve the request");
                     }else{
                         try{
                             System.out.println(instance.getPublicIpAddress());
+
+                            // update (add) current metric
+                            updateInstanceMetric(instance, metric, true);
+
                             String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
 
                             //TODO: method that update the instance load
@@ -123,12 +131,13 @@ public class EC2LoadBalancer {
                                 result.append(line);
                             }
 
+                            // update (subtract) current metric
+                            updateInstanceMetric(instance, metric, false);
+
                             exchange.sendResponseHeaders(200, result.length());
                             OutputStream os = exchange.getResponseBody();
                             os.write(result.toString().getBytes());
                             os.close();
-                            // update (subtract) current metric
-                            updateInstanceMetric(instance, metric, false);
                         }catch(Exception e){
                             e.printStackTrace();
                         }
@@ -152,10 +161,10 @@ public class EC2LoadBalancer {
     public static void updateRunningInstances(){
         instances = null;
         instances = EC2LBGeneralOperations.getRunningInstancesArray();
-        System.out.println("Running instances: "+instances.size());
+        System.out.println("Running instances:  "+instances.size());
     }
 
-    public static HashMap<Instance, BigInteger> getBestMachineIp(BigInteger costEstimation){
+    public static synchronized HashMap<Instance, BigInteger> getBestMachineIp(BigInteger costEstimation){
         Instance result = null;
         float currentCPULoad = 0;
         HashMap<Instance, BigInteger> finalResult = new HashMap<>();
@@ -165,21 +174,23 @@ public class EC2LoadBalancer {
         BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
         System.out.println("Estimated cost "+response.toString());
 
-        for (Map.Entry<String,Instance> entry: instances.entrySet()){
-            String instanceLoad;
-            try {
-                //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
-                //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
-                //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
-                currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
-                BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
-                        new MathContext(3, RoundingMode.HALF_EVEN));
-                if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
-                    finalResult.put(entry.getValue(), response);
-                    return finalResult;
+        synchronized (HashMap.class){
+            for (Map.Entry<String,Instance> entry: instances.entrySet()){
+                String instanceLoad;
+                try {
+                    //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
+                    //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
+                    //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
+                    currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
+                    BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
+                            new MathContext(3, RoundingMode.HALF_EVEN));
+                    if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
+                        finalResult.put(entry.getValue(), response);
+                        return finalResult;
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
             }
         }
         /*
@@ -195,8 +206,6 @@ public class EC2LoadBalancer {
                     System.out.println("waiting....");
                 }
                 System.out.println("returning new instance");
-                // update (add) current metric
-                updateInstanceMetric(newInstance, response, true);
 
                 finalResult.put(EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId()), response);
                 return finalResult;
@@ -205,27 +214,72 @@ public class EC2LoadBalancer {
             }
 
         }
+
         finalResult.put(result, response);
         return finalResult;
     }
 
-    public static void updateInstanceMetric(Instance newInstance, BigInteger response, boolean toAdd){
+    public static void updateInstanceMetric(Instance newInstance, BigInteger response, boolean toAdd) throws InterruptedException{
 
         String instanceId = newInstance.getInstanceId();
         BigInteger metricToUpdate = response;
 
-        if(machineCurrentMetric.containsKey(instanceId)){
-            metricToUpdate = machineCurrentMetric.get(instanceId);
-            if(toAdd){
-                metricToUpdate = metricToUpdate.add(response);
-            } else {
-                metricToUpdate = metricToUpdate.subtract(response);
+        synchronized(HashMap.class){
+            if(machineCurrentMetric.containsKey(instanceId)) {
+                metricToUpdate = machineCurrentMetric.get(instanceId);
+                if(toAdd){
+                    metricToUpdate = metricToUpdate.add(response);
+                } else {
+                    metricToUpdate = metricToUpdate.subtract(response);
+                }
             }
 
+            machineCurrentMetric.put(instanceId, metricToUpdate);
         }
-        machineCurrentMetric.put(instanceId, metricToUpdate);
-
-        System.out.println("Updated pair key-value: <" + instanceId + ":" + metricToUpdate + ">");
+        System.out.println((toAdd ? "Added " : "Subtracted ") + response + " pair key-value: <" + instanceId + ":" + metricToUpdate + ">");
     }
+
+
+    public static synchronized void lock() throws InterruptedException {
+        while(isLocked){
+            machineCurrentMetric.getClass().wait();
+        }
+        isLocked = true;
+    }
+
+    public static synchronized void unlock() {
+        isLocked = false;
+        machineCurrentMetric.getClass().notify();
+    }
+
+    /*
+    public class Lock {
+
+        private boolean isLocked = false;
+
+        public synchronized void lock() throws InterruptedException {
+            while(isLocked){
+                wait();
+            }
+            isLocked = true;
+        }
+
+        public synchronized void unlock() {
+            isLocked = false;
+            notify();
+        }
+    }
+
+    synchronized(EC){
+
+    }
+
+
+
+    */
+
+
+
+
 }
 
