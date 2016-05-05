@@ -90,16 +90,21 @@ public class EC2LoadBalancer {
                     Headers responseHeaders = exchange.getResponseHeaders();
                     responseHeaders.set("Content-Type", "text/html");
                     HashMap map = queryToMap(exchange.getRequestURI().getQuery());
- 
+
                     BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
                     HashMap<Instance, BigInteger> bestMachine = getBestMachineIp(numberToBeFactored);
                     Instance instance = (Instance) bestMachine.keySet().toArray()[0];
                     BigInteger metric = bestMachine.get(instance);
+
                     if (instance == null){
                         System.out.println("Could not find any instance to serve the request");
                     }else{
                         try{
                             System.out.println(instance.getPublicIpAddress());
+
+                            // update (add) current metric
+                            updateInstanceMetric(instance, metric, true);
+
                             String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
 
                             //TODO: method that update the instance load
@@ -123,12 +128,13 @@ public class EC2LoadBalancer {
                                 result.append(line);
                             }
 
+                            // update (subtract) current metric
+                            updateInstanceMetric(instance, metric, false);
+
                             exchange.sendResponseHeaders(200, result.length());
                             OutputStream os = exchange.getResponseBody();
                             os.write(result.toString().getBytes());
                             os.close();
-                            // update (subtract) current metric
-                            updateInstanceMetric(instance, metric, false);
                         }catch(Exception e){
                             e.printStackTrace();
                         }
@@ -195,8 +201,6 @@ public class EC2LoadBalancer {
                     System.out.println("waiting....");
                 }
                 System.out.println("returning new instance");
-                // update (add) current metric
-                updateInstanceMetric(newInstance, response, true);
 
                 finalResult.put(EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId()), response);
                 return finalResult;
@@ -205,6 +209,7 @@ public class EC2LoadBalancer {
             }
 
         }
+
         finalResult.put(result, response);
         return finalResult;
     }
@@ -214,18 +219,18 @@ public class EC2LoadBalancer {
         String instanceId = newInstance.getInstanceId();
         BigInteger metricToUpdate = response;
 
-        if(machineCurrentMetric.containsKey(instanceId)){
+        if(machineCurrentMetric.containsKey(instanceId)) {
             metricToUpdate = machineCurrentMetric.get(instanceId);
             if(toAdd){
                 metricToUpdate = metricToUpdate.add(response);
             } else {
                 metricToUpdate = metricToUpdate.subtract(response);
             }
-
         }
+
         machineCurrentMetric.put(instanceId, metricToUpdate);
 
-        System.out.println("Updated pair key-value: <" + instanceId + ":" + metricToUpdate + ">");
+        System.out.println((toAdd ? "Added " : "Subtracted ") + response + " pair key-value: <" + instanceId + ":" + metricToUpdate + ">");
     }
 }
 
