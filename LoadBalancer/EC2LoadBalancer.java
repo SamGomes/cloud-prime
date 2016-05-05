@@ -90,7 +90,7 @@ public class EC2LoadBalancer {
                     Headers responseHeaders = exchange.getResponseHeaders();
                     responseHeaders.set("Content-Type", "text/html");
                     HashMap map = queryToMap(exchange.getRequestURI().getQuery());
-
+ 
                     BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
                     HashMap<Instance, BigInteger> bestMachine = getBestMachineIp(numberToBeFactored);
                     Instance instance = (Instance) bestMachine.keySet().toArray()[0];
