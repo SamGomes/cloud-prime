@@ -21,6 +21,8 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
+import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.elasticloadbalancing.model.*;
 
 import java.util.*;
 
@@ -188,5 +190,18 @@ public class EC2LBGeneralOperations {
 
     public static Instance getInstance(String id){
         return runningInstancesArray.get(id);
+
+    }
+
+    public static String getInstanceStatus(String instanceId) {
+        DescribeInstancesRequest describeInstanceRequest = new DescribeInstancesRequest().withInstanceIds(instanceId);
+        DescribeInstancesResult describeInstanceResult = ec2.describeInstances(describeInstanceRequest);
+        return describeInstanceResult.getReservations().get(0).getInstances().get(0).getState().getName();
+    }
+
+    public static Instance getInstanceById(String instanceId){
+        DescribeInstancesRequest describeInstanceRequest = new DescribeInstancesRequest().withInstanceIds(instanceId);
+        DescribeInstancesResult describeInstanceResult = ec2.describeInstances(describeInstanceRequest);
+        return describeInstanceResult.getReservations().get(0).getInstances().get(0);
     }
 }

@@ -1,5 +1,8 @@
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
+import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Instance;
+import com.amazonaws.services.elasticloadbalancing.model.InstanceState;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -92,7 +95,7 @@ public class EC2LoadBalancer {
                         System.out.println("Could not find any instance to serve the request");
                     }else{
                         try{
-                            System.out.println(instance.getInstanceId());
+                            System.out.println(instance.getPublicIpAddress());
                             String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
 
                             //TODO: method that update the instance load
@@ -120,7 +123,9 @@ public class EC2LoadBalancer {
                             OutputStream os = exchange.getResponseBody();
                             os.write(result.toString().getBytes());
                             os.close();
-                        }catch(Exception e){}
+                        }catch(Exception e){
+                            e.printStackTrace();
+                        }
                     }
                 }
             }).start();
@@ -177,15 +182,12 @@ public class EC2LoadBalancer {
             try {
                 // launch instance
                 Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
-                String state = newInstance.getState().getName();
-                while (!state.equals("running")){
+                while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
                     TimeUnit.SECONDS.sleep(5);
                     System.out.println("waiting....");
-                    System.out.println("Current state: " + state);
-                    state = newInstance.getState().getName();
                 }
                 System.out.println("returning new instance");
-                return newInstance;
+                return EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
             } catch (Exception e) {
                 e.printStackTrace();
             }
