@@ -1,8 +1,4 @@
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
-import com.amazonaws.services.ec2.model.DescribeInstancesResult;
 import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.elasticloadbalancing.model.InstanceState;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -29,8 +25,8 @@ import java.util.concurrent.TimeUnit;
 
 public class EC2LoadBalancer {
 
-	private static ConcurrentHashMap<String,Instance> instances;
-	private static int next = 0;
+    private static ConcurrentHashMap<String,Instance> instances;
+    private static int next = 0;
     private static int TIME_TO_REFRESH_INSTANCES = 20000;
     private static int THREAD_SLEEP_TIME = 20 * 1000; //Time in milliseconds
     private static Timer timer = new Timer();
@@ -42,8 +38,6 @@ public class EC2LoadBalancer {
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
 
     private static ConcurrentHashMap<String, BigInteger> machineCurrentMetric = new ConcurrentHashMap<>();
-
-    private static boolean isLocked = false;
 
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -57,31 +51,31 @@ public class EC2LoadBalancer {
 
     public static void createInstanceList(){
 
-    	try{
-        	EC2LBGeneralOperations.init();
+        try{
+            EC2LBGeneralOperations.init();
             DynamoDBGeneralOperations.init();
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
-        	//instances = EC2LBGeneralOperations.getInstances();
+            //instances = EC2LBGeneralOperations.getInstances();
             instances = EC2LBGeneralOperations.getRunningInstancesArray();
-        	next = 0;
-    	}catch(Exception e){
+            next = 0;
+        }catch(Exception e){
 
-    	}
+        }
     }
 
     public static HashMap queryToMap(String query){
- 	    HashMap result = new HashMap();
- 	    String[] params = query.split("&");
- 	    for (int i=0; i< params.length;i++) {
- 	        String pair[] = params[i].split("=");
- 	        if (pair.length>1) {
- 	            result.put(pair[0], pair[1]);
- 	        }else{
- 	            result.put(pair[0], "");
- 	        }
- 	    }
- 	    return result;
- 	}
+        HashMap result = new HashMap();
+        String[] params = query.split("&");
+        for (int i=0; i< params.length;i++) {
+            String pair[] = params[i].split("=");
+            if (pair.length>1) {
+                result.put(pair[0], pair[1]);
+            }else{
+                result.put(pair[0], "");
+            }
+        }
+        return result;
+    }
 
     static class MyHandler implements HttpHandler {
         public void handle(final HttpExchange exchange) throws IOException {
@@ -164,7 +158,7 @@ public class EC2LoadBalancer {
         System.out.println("Running instances:  "+instances.size());
     }
 
-    public static synchronized HashMap<Instance, BigInteger> getBestMachineIp(BigInteger costEstimation){
+    public static HashMap<Instance, BigInteger> getBestMachineIp(BigInteger costEstimation){
         Instance result = null;
         float currentCPULoad = 0;
         HashMap<Instance, BigInteger> finalResult = new HashMap<>();
@@ -174,25 +168,25 @@ public class EC2LoadBalancer {
         BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
         System.out.println("Estimated cost "+response.toString());
 
-        synchronized (HashMap.class){
-            for (Map.Entry<String,Instance> entry: instances.entrySet()){
-                String instanceLoad;
-                try {
-                    //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
-                    //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
-                    //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
-                    currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
-                    BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
-                            new MathContext(3, RoundingMode.HALF_EVEN));
-                    if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
-                        finalResult.put(entry.getValue(), response);
-                        return finalResult;
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
+
+        for (Map.Entry<String,Instance> entry: instances.entrySet()){
+            String instanceLoad;
+            try {
+                //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
+                //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
+                //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
+                currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
+                BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
+                        new MathContext(3, RoundingMode.HALF_EVEN));
+                if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
+                    finalResult.put(entry.getValue(), response);
+                    return finalResult;
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
+
         /*
         *  There are no instances available to process the request.
         *  Another instance is launched and the request is sent
@@ -206,8 +200,9 @@ public class EC2LoadBalancer {
                     System.out.println("waiting....");
                 }
                 System.out.println("returning new instance");
-
-                finalResult.put(EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId()), response);
+                Instance instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
+                tryNewInstance(instance.getPublicIpAddress());
+                finalResult.put(instance, response);
                 return finalResult;
             } catch (Exception e) {
                 e.printStackTrace();
@@ -224,62 +219,45 @@ public class EC2LoadBalancer {
         String instanceId = newInstance.getInstanceId();
         BigInteger metricToUpdate = response;
 
-        synchronized(HashMap.class){
-            if(machineCurrentMetric.containsKey(instanceId)) {
-                metricToUpdate = machineCurrentMetric.get(instanceId);
-                if(toAdd){
-                    metricToUpdate = metricToUpdate.add(response);
-                } else {
-                    metricToUpdate = metricToUpdate.subtract(response);
-                }
+        if(machineCurrentMetric.containsKey(instanceId)) {
+            metricToUpdate = machineCurrentMetric.get(instanceId);
+            if(toAdd){
+                metricToUpdate = metricToUpdate.add(response);
+            } else {
+                metricToUpdate = metricToUpdate.subtract(response);
             }
-
-            machineCurrentMetric.put(instanceId, metricToUpdate);
         }
+
+        machineCurrentMetric.put(instanceId, metricToUpdate);
+
         System.out.println((toAdd ? "Added " : "Subtracted ") + response + " pair key-value: <" + instanceId + ":" + metricToUpdate + ">");
     }
 
+    public static boolean tryNewInstance(String instancePublicAddress){
 
-    public static synchronized void lock() throws InterruptedException {
-        while(isLocked){
-            machineCurrentMetric.getClass().wait();
-        }
-        isLocked = true;
-    }
+        HttpClient client = HttpClientBuilder.create().build();
+        String url = "http://"+instancePublicAddress+":8000/f.html?n=2";
+        HttpGet request = new HttpGet(url);
+        HttpResponse response;
+        int statusCode = 404;
 
-    public static synchronized void unlock() {
-        isLocked = false;
-        machineCurrentMetric.getClass().notify();
-    }
-
-    /*
-    public class Lock {
-
-        private boolean isLocked = false;
-
-        public synchronized void lock() throws InterruptedException {
-            while(isLocked){
-                wait();
+        // While the response code is not 200 keep sending requests
+        // This will ensure the web server is already running when we forward the request
+        while(statusCode != 200){
+            try {
+                response = client.execute(request);
+                statusCode = response.getStatusLine().getStatusCode();
+                System.out.println("Response: "+statusCode);
+            } catch (IOException e) {
+                try {
+                    Thread.sleep(5000);
+                    System.out.println("New instance unreachable");
+                } catch (InterruptedException e1) {
+                    e.printStackTrace();
+                }
             }
-            isLocked = true;
         }
-
-        public synchronized void unlock() {
-            isLocked = false;
-            notify();
-        }
+        return true;
     }
-
-    synchronized(EC){
-
-    }
-
-
-
-    */
-
-
-
-
 }
 
