@@ -164,10 +164,8 @@ public class EC2LoadBalancer {
         HashMap<Instance, BigInteger> finalResult = new HashMap<>();
         updateRunningInstances(); //update running instances
 
-        //BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation); //This function returns the result of the scan request
-        BigInteger response = DynamoDBGeneralOperations.estimateCost(costEstimation); //TODO: return the result with a query request
+        BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation);
         System.out.println("Estimated cost "+response.toString());
-
 
         for (Map.Entry<String,Instance> entry: instances.entrySet()){
             String instanceLoad;

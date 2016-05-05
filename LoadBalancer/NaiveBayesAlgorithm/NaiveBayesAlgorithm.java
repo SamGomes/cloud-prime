@@ -1,9 +1,5 @@
 import java.io.*;
 import java.util.*;
-import java.text.*;
-import java.lang.Math.*;
-import java.util.regex.*;
-import java.util.Random;
 
 /*
   1º Choose lines randomly to serve as training data from 

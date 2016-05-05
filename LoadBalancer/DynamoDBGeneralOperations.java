@@ -27,8 +27,6 @@ import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.model.*;
-import com.amazonaws.services.dynamodbv2.util.Tables;
-
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -182,38 +180,7 @@ public class DynamoDBGeneralOperations {
 
                 Map<String, Condition> keyConditions = new HashMap<>();
                 keyConditions.put(PRIMARY_KEY, hashKeyCondition);
-
-                //QueryResult equalityValue = queryTable(TABLE_NAME,keyConditions,1);
-
-//                List<Map<String,AttributeValue>> listValues = equalityValue.getItems();
-//
-//                if(listValues.size()!=0){
-//                    return new BigInteger(listValues.get(0).get(COST_ATTRIBUTE).getS());
-//                }
-
-//                hashKeyCondition = new Condition()
-//                        .withComparisonOperator(ComparisonOperator.GT.toString())
-//                        .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
-//
-//                keyConditions = new HashMap<>();
-//                keyConditions.put(PRIMARY_KEY, hashKeyCondition);
-
                 QueryResult higherValue = queryTable(TABLE_NAME,keyConditions,1);
-
-//                numbersFactorized.add(new BigInteger(higherValue.getItems().get(0).get(0).getS()));
-//
-//                hashKeyCondition = new Condition()
-//                        .withComparisonOperator(ComparisonOperator.LT.toString())
-//                        .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
-//
-//                keyConditions = new HashMap<>();
-//                keyConditions.put(COST_ATTRIBUTE, hashKeyCondition);
-//
-//                QueryResult lowerValue = queryTable(TABLE_NAME,keyConditions,1);
-//
-//                numbersFactorized.add(new BigInteger(lowerValue.getItems().get(0).get(0).getS()));
-//
-
 
             }catch (Exception e){
                 e.printStackTrace();
@@ -234,23 +201,33 @@ public class DynamoDBGeneralOperations {
 
         try{
 
-            Map<String, AttributeValue> expressionAttributeValues =
-                    new HashMap<>();
-            expressionAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
+            BigInteger numberCostTuple;
 
-            ScanRequest scanRequest = new ScanRequest()
+            Condition hashKeyCondition = new Condition()
+                    .withComparisonOperator(ComparisonOperator.EQ.toString())
+                    .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
+
+            Map<String, Condition> keyConditions = new HashMap<>();
+            keyConditions.put(PRIMARY_KEY, hashKeyCondition);
+
+            QueryRequest queryRequest = new QueryRequest()
                     .withTableName(TABLE_NAME)
-                    .withFilterExpression("numberToBeFactored = :val")
-                    .withExpressionAttributeValues(expressionAttributeValues);
+                    .withKeyConditions(keyConditions)
+                    .withLimit(1);
 
-            ScanResult equalityValue = dynamoDB.scan(scanRequest);
-
-            List<Map<String,AttributeValue>> listValues = equalityValue.getItems();
-
-            if(listValues.size()!=0){
-                return new BigInteger(listValues.get(0).get(COST_ATTRIBUTE).getS());
+            QueryResult result = dynamoDB.query(queryRequest);
+            if (result.getCount() > 0){
+                for (Map<String,AttributeValue> item: result.getItems()){
+                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
+                    return numberCostTuple;
+                }
             }
 
+            /*
+            * If the number is not present in the table,
+            * search for the nearest lower and higher numbers
+            * then use them to calculate the estimated cost
+            * */
             Map<String, AttributeValue> expressionLowerAttributeValues =
                     new HashMap<>();
             expressionLowerAttributeValues.put(":val", new AttributeValue().withS(estimate.toString()));
