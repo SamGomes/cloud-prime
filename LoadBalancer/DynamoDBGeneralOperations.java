@@ -25,8 +25,11 @@ import com.amazonaws.services.cloudwatch.model.Dimension;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.document.*;
 import com.amazonaws.services.dynamodbv2.model.*;
+
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -102,17 +105,24 @@ public class DynamoDBGeneralOperations {
         // System.out.println("Table Description: " + tableDescription);
     }
 
-    static QueryResult queryTable(String tableName,Map<String,Condition> conditions,int limit) throws Exception {
+    static ItemCollection<QueryOutcome> queryTable(String tableName,String var, String val) throws Exception {
+
+        DynamoDB dynamoDBT = new DynamoDB(dynamoDB);
 
 
+        Table table = dynamoDBT.getTable(tableName);
 
-        QueryRequest queryRequest = new QueryRequest()
-                .withTableName(tableName)
-                .withKeyConditions(conditions)
-                .withLimit(limit);
+        System.out.println("varVal: "+var +" = "+val);
 
-        QueryResult result = dynamoDB.query(queryRequest);
-        return result;
+        QuerySpec spec = new QuerySpec()
+                .withKeyConditionExpression(var+" = :v_id")
+                .withScanIndexForward(true)
+                .withValueMap(new ValueMap()
+                        .withString(":v_id", val));
+
+        ItemCollection<QueryOutcome> items = table.query(spec);
+
+        return items;
     }
 
     static void insertTuple(String tableName,String[] attrAndValues) throws Exception {
@@ -161,38 +171,6 @@ public class DynamoDBGeneralOperations {
         }
         return instanceLoadTuple;
     }
-
-    static BigInteger estimateCost(BigInteger estimate){
-
-        //TODO: Query with < and > operators and scan index forward
-
-
-        ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
-
-
-        Map<String, AttributeValue> lastEvaluatedKey = null;
-        do {
-
-            try{
-                Condition hashKeyCondition = new Condition()
-                        .withComparisonOperator(ComparisonOperator.EQ.toString())
-                        .withAttributeValueList(new AttributeValue().withS(estimate.toString()));
-
-                Map<String, Condition> keyConditions = new HashMap<>();
-                keyConditions.put(PRIMARY_KEY, hashKeyCondition);
-                QueryResult higherValue = queryTable(TABLE_NAME,keyConditions,1);
-
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-        } while (lastEvaluatedKey != null);
-
-        BigInteger[] array = new BigInteger[numbersFactorized.size()];
-        array = numbersFactorized.toArray(array);
-        //BigInteger result = calculateEstimatedCost(array, estimate);
-        return new BigInteger("12345");
-    }
-
 
 
     static BigInteger estimateCostScan(BigInteger estimate){

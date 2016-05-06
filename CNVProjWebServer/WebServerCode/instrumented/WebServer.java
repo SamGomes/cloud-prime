@@ -17,6 +17,7 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 
 
@@ -39,7 +40,7 @@ public class WebServer{
 		dbgo.createTable("MSSCentralTable", "numberToBeFactored",
                 new String[] {CENTRAL_TABLE_COST_ATTRIBUTE, CENTRAL_TABLE_TIME_ATTRIBUTE});
 
-        instanceId = getInstanceId();
+        //instanceId = getInstanceId();
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
 	    server.setExecutor(null); // creates a default executor
@@ -109,7 +110,7 @@ public class WebServer{
 				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 				BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
 				try{
-                    float cpuBeforeFactorization = getInstanceCPU(instanceId);
+                    //float cpuBeforeFactorization = getInstanceCPU(instanceId);
                     long startTime = System.nanoTime();
 				    Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain "+ numberToBeFactored);
 				    pro.waitFor();
@@ -117,7 +118,7 @@ public class WebServer{
 
 			        String response = saveStats("factorization result: ",numberToBeFactored,
                             Thread.currentThread().getId(), pro.getInputStream(),
-                            (endTime-startTime)/NANO_TO_MILI, cpuBeforeFactorization);
+                            (endTime-startTime)/NANO_TO_MILI, 4);
 					System.out.print(response+"\n");
 
 			        exchange.sendResponseHeaders(200, response.length());
@@ -165,19 +166,20 @@ public class WebServer{
         GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
                 .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
                 .withNamespace("AWS/EC2")
-                .withPeriod(60)
+                .withPeriod(new Integer(60))
                 .withMetricName("CPUUtilization")
-                .withStatistics("Average")
-                .withDimensions(instanceDimension)
+                .withStatistics(new String[]{"Average"})
+                .withDimensions(new Dimension[]{instanceDimension})
                 .withEndTime(new Date());
         GetMetricStatisticsResult getMetricStatisticsResult =
-                EC2LBGeneralOperations.cloudWatch.getMetricStatistics(request);
-        List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
+                EC2WSGeneralOperations.cloudWatch.getMetricStatistics(request);
+        List datapoints = getMetricStatisticsResult.getDatapoints();
 
         int datapointCount=0;
-        for (Datapoint dp : datapoints) {
+        Iterator it = datapoints.iterator();
+        while (it.hasNext()) {
             datapointCount++;
-            dpWAverage += 1/datapointCount * dp.getAverage();
+            dpWAverage += 1/datapointCount * ((Datapoint) it.next()).getAverage().doubleValue();
         }
 
         System.out.println(" CPU utilization for instance " + id + " = " + dpWAverage);

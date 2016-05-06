@@ -1,3 +1,5 @@
+import com.amazonaws.services.dynamodbv2.document.ItemCollection;
+import com.amazonaws.services.dynamodbv2.document.QueryOutcome;
 import com.amazonaws.services.ec2.model.Instance;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -32,14 +34,16 @@ public class EC2LoadBalancer {
     private static int THREAD_SLEEP_TIME = 20 * 1000; //Time in milliseconds
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
+
     private static final BigDecimal THRESHOLD = new BigDecimal("2300777"); //TODO: set a meaningful value
+
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
     private static final String AMI_ID = "ami-83f206e3";
     private static ExecutorService executor;
 
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
 
-    private static ConcurrentHashMap<String, BigInteger> machineCurrentMetric = new ConcurrentHashMap<>();
+    private static ConcurrentHashMap<String, IMetric> machineCurrentMetric = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
@@ -103,14 +107,9 @@ public class EC2LoadBalancer {
                             System.out.println("Thread id: "+Thread.currentThread().getId());
 
                             // update (add) current metric
-                            updateInstanceMetric(instance, metric, true);
+                            updateInstanceMetric(instance, numberToBeFactored,metric, true); //cannot be numberToBeFactored
 
                             String url = "http://"+instance.getPublicIpAddress()+":8000/f.html?n="+numberToBeFactored;
-
-                            //TODO: method that update the instance load
-                            //Map<String, AttributeValue> instanceLoad = DynamoDBWebServerGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,instance.getInstanceId());
-                            //int currentLoad = Integer.parseInt(instanceLoad.get(instance.getInstanceId()).getS());
-                            //DynamoDBWebServerGeneralOperations.updateInstanceLoad(INSTANCE_LOAD_TABLE_NAME, currentLoad+0);
 
                             HttpClient client = HttpClientBuilder.create().build();
                             HttpGet request = new HttpGet(url);
@@ -129,7 +128,7 @@ public class EC2LoadBalancer {
                             }
 
                             // update (subtract) current metric
-                            updateInstanceMetric(instance, metric, false);
+                            updateInstanceMetric(instance,numberToBeFactored, metric, false);
 
                             exchange.sendResponseHeaders(200, result.length());
                             OutputStream os = exchange.getResponseBody();
@@ -163,7 +162,7 @@ public class EC2LoadBalancer {
 
     public static HashMap<Instance, BigInteger> getBestMachineIp(BigInteger costEstimation){
         Instance result = null;
-        float currentCPULoad = 0;
+        float currentCPULoad;
         HashMap<Instance, BigInteger> finalResult = new HashMap<>();
         updateRunningInstances(); //update running instances
 
@@ -171,11 +170,8 @@ public class EC2LoadBalancer {
         System.out.println("Estimated cost "+response.toString());
 
         for (Map.Entry<String,Instance> entry: instances.entrySet()){
-            String instanceLoad;
             try {
-                //instanceLoad = DynamoDBGeneralOperations.getInstanceTuple(INSTANCE_LOAD_TABLE_NAME,entry.getValue().getInstanceId());
-                //int currentLoad = Integer.parseInt(instanceLoad.get(entry.getKey()).getS());
-                //BigInteger currentLoad = new BigInteger(instanceLoad.get(entry.getKey()).getS());
+
                 currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
                 BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
                         new MathContext(3, RoundingMode.HALF_EVEN));
@@ -214,23 +210,52 @@ public class EC2LoadBalancer {
         return finalResult;
     }
 
-    public static void updateInstanceMetric(Instance newInstance, BigInteger response, boolean toAdd) throws InterruptedException{
+    public static void updateInstanceMetric(Instance newInstance, BigInteger num, BigInteger response, boolean toAdd) throws InterruptedException{
 
         String instanceId = newInstance.getInstanceId();
-        BigInteger metricToUpdate = response;
+        try {
 
-        if(machineCurrentMetric.containsKey(instanceId)) {
-            metricToUpdate = machineCurrentMetric.get(instanceId);
-            if(toAdd){
-                metricToUpdate = metricToUpdate.add(response);
-            } else {
-                metricToUpdate = metricToUpdate.subtract(response);
+            ItemCollection<QueryOutcome> reqTimes = (DynamoDBGeneralOperations.queryTable("MSSCentralTable", "numberToBeFactored", num.toString()));
+            String reqTime="NA";
+            if(reqTimes.iterator().hasNext()) {
+                reqTime = reqTimes.iterator().next().get("timeToFactorize").toString();
+                System.out.println("reqTime: " + reqTime);
+
             }
+
+            IMetric metricToUpdate;
+
+
+            if(machineCurrentMetric.containsKey(instanceId)) {
+
+                metricToUpdate = machineCurrentMetric.get(instanceId);
+                if(toAdd){
+                    //update cost;
+                    metricToUpdate.setCost(metricToUpdate.getCost().add(response));
+
+                    //update time
+                    machineCurrentMetric.get(instanceId).addToReqList(reqTime);
+
+                } else {
+                    //update cost;
+                    metricToUpdate.setCost(metricToUpdate.getCost().subtract(response));
+
+                    //update time
+                    machineCurrentMetric.get(instanceId).subFromReqList(reqTime);
+                }
+
+            }else{
+                metricToUpdate = new IMetric();
+                metricToUpdate.setCost(response);
+                metricToUpdate.addToReqList(reqTime.toString());
+
+                machineCurrentMetric.put(instanceId, metricToUpdate);
+            }
+
+            System.out.println((toAdd ? "Added " : "Subtracted ") + response + " pair key-value: <" + instanceId + ":" + ">");
+        }catch (Exception e){
+            e.printStackTrace();
         }
-
-        machineCurrentMetric.put(instanceId, metricToUpdate);
-
-        System.out.println((toAdd ? "Added " : "Subtracted ") + response + " pair key-value: <" + instanceId + ":" + metricToUpdate + ">");
     }
 
     public static boolean tryNewInstance(String instancePublicAddress){
