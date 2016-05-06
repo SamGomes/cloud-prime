@@ -21,12 +21,13 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class EC2LoadBalancer {
 
     private static ConcurrentHashMap<String,Instance> instances;
-    private static int next = 0;
     private static int TIME_TO_REFRESH_INSTANCES = 20000;
     private static int THREAD_SLEEP_TIME = 20 * 1000; //Time in milliseconds
     private static Timer timer = new Timer();
@@ -34,6 +35,7 @@ public class EC2LoadBalancer {
     private static final BigDecimal THRESHOLD = new BigDecimal("2300777"); //TODO: set a meaningful value
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
     private static final String AMI_ID = "ami-83f206e3";
+    private static ExecutorService executor;
 
     private static ArrayList<BigInteger> pendingRequests = new ArrayList<>();
 
@@ -43,7 +45,8 @@ public class EC2LoadBalancer {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         LoadBalancerIp = InetAddress.getLocalHost().getHostAddress();
         server.createContext("/f.html", new MyHandler());
-        server.setExecutor(null); // creates a default executor
+        executor = Executors.newFixedThreadPool(4);
+        server.setExecutor(executor); // creates a default executor
         createInstanceList();
         server.start();
         startTimer();
@@ -55,9 +58,7 @@ public class EC2LoadBalancer {
             EC2LBGeneralOperations.init();
             DynamoDBGeneralOperations.init();
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
-            //instances = EC2LBGeneralOperations.getInstances();
             instances = EC2LBGeneralOperations.getRunningInstancesArray();
-            next = 0;
         }catch(Exception e){
 
         }
@@ -80,6 +81,7 @@ public class EC2LoadBalancer {
     static class MyHandler implements HttpHandler {
         public void handle(final HttpExchange exchange) throws IOException {
 
+
             new Thread(new Runnable(){
 
                 //@Override
@@ -98,6 +100,7 @@ public class EC2LoadBalancer {
                     }else{
                         try{
                             System.out.println(instance.getPublicIpAddress());
+                            System.out.println("Thread id: "+Thread.currentThread().getId());
 
                             // update (add) current metric
                             updateInstanceMetric(instance, metric, true);
@@ -195,7 +198,6 @@ public class EC2LoadBalancer {
                 Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
                 while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
                     TimeUnit.SECONDS.sleep(5);
-                    System.out.println("waiting....");
                 }
                 System.out.println("returning new instance");
                 Instance instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
