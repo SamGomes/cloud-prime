@@ -22,10 +22,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class EC2LoadBalancer {
 
@@ -35,7 +32,7 @@ public class EC2LoadBalancer {
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
 
-    private static final BigDecimal THRESHOLD = new BigDecimal("2300777"); //TODO: set a meaningful value
+    private static final BigDecimal THRESHOLD = new BigDecimal("20000"); //TODO: set a meaningful value
 
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
     private static final String AMI_ID = "ami-83f206e3";
@@ -172,13 +169,44 @@ public class EC2LoadBalancer {
         for (Map.Entry<String,Instance> entry: instances.entrySet()){
             try {
 
-                currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
-                BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
-                        new MathContext(3, RoundingMode.HALF_EVEN));
-                if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
+//                currentCPULoad = DynamoDBGeneralOperations.getInstanceCPU(entry.getValue().getInstanceId());
+//                BigDecimal cpuLoad = new BigDecimal(currentCPULoad,
+//                        new MathContext(3, RoundingMode.HALF_EVEN));
+
+                /*if(cpuLoad.add(new BigDecimal(costEstimation)).compareTo(THRESHOLD) == -1){
+                    finalResult.put(entry.getValue(), response);
+                    return finalResult;
+                }*/
+                IMetric metric = machineCurrentMetric.get(entry.getValue().getInstanceId());
+
+                System.out.println("metric: "+ machineCurrentMetric.elements().toString());
+
+
+                //first request!
+                if(metric!=null){
+
+                    BigDecimal count = BigDecimal.ZERO;
+
+                    ConcurrentLinkedQueue<String> reqList =  metric.getReqList();
+
+                    for(String time :reqList){
+                        count = count.add(new BigDecimal(time));
+                    }
+                    BigDecimal avgTime;
+                    if(count.compareTo(BigDecimal.ZERO)!=0) {
+                        avgTime = (count.divide(BigDecimal.valueOf(metric.getReqList().size()))).multiply(BigDecimal.valueOf(0.7)).add(BigDecimal.valueOf(metric.getReqList().size()).multiply(BigDecimal.valueOf(0.3)));
+                    }else
+                        avgTime = BigDecimal.ZERO;
+                    System.out.println("AAAAAAAAAAAAAAAAAAAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG: "+ avgTime.toString());
+                    if(avgTime.compareTo(THRESHOLD) == -1){
+                        finalResult.put(entry.getValue(), response);
+                        return finalResult;
+                    }
+                }else{
                     finalResult.put(entry.getValue(), response);
                     return finalResult;
                 }
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -190,16 +218,16 @@ public class EC2LoadBalancer {
         * */
         if (result == null){
             try {
-                // launch instance
-                Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
-                while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
-                    TimeUnit.SECONDS.sleep(5);
-                }
+//                // launch instance
+//                Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
+//                while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
+//                    TimeUnit.SECONDS.sleep(5);
+//                }
                 System.out.println("returning new instance");
-                Instance instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
-                tryNewInstance(instance.getPublicIpAddress());
-                finalResult.put(instance, response);
-                return finalResult;
+//                Instance instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
+//                tryNewInstance(instance.getPublicIpAddress());
+//                finalResult.put(instance, response);
+//                return finalResult;
             } catch (Exception e) {
                 e.printStackTrace();
             }
