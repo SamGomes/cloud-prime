@@ -28,6 +28,7 @@ public class EC2LoadBalancer {
 
     private static ConcurrentHashMap<String,Instance> instances;
     private static int TIME_TO_REFRESH_INSTANCES = 20000;
+    private static int MINIMUM_TIME_TO_WAIT = 7000;
     private static int THREAD_SLEEP_TIME = 20 * 1000; //Time in milliseconds
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
@@ -146,7 +147,15 @@ public class EC2LoadBalancer {
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
+
                 updateRunningInstances();
+
+                try {
+                    deleteUnusedInstances();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
             }
         }, TIME_TO_REFRESH_INSTANCES, TIME_TO_REFRESH_INSTANCES);
     }
@@ -157,15 +166,59 @@ public class EC2LoadBalancer {
         System.out.println("Running instances:  "+instances.size());
     }
 
-    public static HashMap<Instance, BigInteger> getBestMachineIp(BigInteger costEstimation){
+    /**
+     * If there's N machines are being unused it terminates N-1 instances
+     *
+     * @throws Exception
+     */
+    public static void deleteUnusedInstances() throws Exception{
+        Instance instance = null;
+        Instance currentInstance;
+
+        // Check if any machine is not being used and terminate if its not needed
+        for (Map.Entry<String,Instance> entry: instances.entrySet()){
+            currentInstance = entry.getValue();
+
+            IMetric metric = machineCurrentMetric.get(currentInstance.getInstanceId());
+
+            System.out.println("metrics: " + (metric != null ? metric.getReqList().toString() : "null"));
+            ConcurrentLinkedQueue<RequestTiming> reqList;
+            // the table is populated with at least one request ????
+            if(metric != null){
+                reqList =  metric.getReqList();
+                if (reqList.isEmpty()){
+                    if(instance == null) {
+                        instance = entry.getValue();
+                    } else {
+                        System.out.println("Terminating instance " + currentInstance.getInstanceId());
+                        EC2LBGeneralOperations.terminateInstance(currentInstance.getInstanceId(), null);
+                    }
+                }
+            }
+        }
+    }
+
+
+    /**
+     * Gets best machine to process a request according to its current cost and estimated cost
+     * for the number to factorize
+     *
+     * @param numberToFactorize
+     * @return instance and estimated cost for the number to be factored
+     */
+    public static HashMap<Instance, BigInteger> getBestMachineIp(BigInteger numberToFactorize){
         Instance result = null;
         float currentCPULoad;
         HashMap<Instance, BigInteger> finalResult = new HashMap<>();
-        updateRunningInstances(); //update running instances
 
-        BigInteger response = DynamoDBGeneralOperations.estimateCostScan(costEstimation);
-        System.out.println("Estimated cost "+response.toString());
+        //update running instances
+        updateRunningInstances();
 
+        // estimated/direct cost for the numberToFactorize
+        BigInteger estimatedTime = DynamoDBGeneralOperations.estimateCostScan(numberToFactorize);
+        System.out.println("Estimated cost (time to factorize): " + estimatedTime.toString());
+
+        // Check current cost/metric of every machine in the running state
         for (Map.Entry<String,Instance> entry: instances.entrySet()){
             try {
 
@@ -177,19 +230,20 @@ public class EC2LoadBalancer {
                     finalResult.put(entry.getValue(), response);
                     return finalResult;
                 }*/
-                IMetric metric = machineCurrentMetric.get(entry.getValue().getInstanceId());
+                String instanceId = entry.getValue().getInstanceId();
+                IMetric metric = machineCurrentMetric.get(instanceId);
 
-                System.out.println("metric: "+ machineCurrentMetric.elements().toString());
+//                System.out.println("metric: " + machineCurrentMetric.elements().toString());
+                System.out.println("metrics: " + (metric != null ? metric.getReqList().toString() : "null"));
 
-
-                //first request!
-                if(metric!=null){
-
+                // the table is populated with at least one request ????
+                if(metric != null){
                     BigDecimal count = BigDecimal.ZERO;
 
-                    ConcurrentLinkedQueue<String> reqList =  metric.getReqList();
+                    ConcurrentLinkedQueue<RequestTiming> reqList =  metric.getReqList();
 
-                    for(String time :reqList){
+/*
+                    for(String time : reqList){
                         count = count.add(new BigDecimal(time));
                     }
                     BigDecimal avgTime;
@@ -202,8 +256,34 @@ public class EC2LoadBalancer {
                         finalResult.put(entry.getValue(), response);
                         return finalResult;
                     }
-                }else{
-                    finalResult.put(entry.getValue(), response);
+*/
+                    
+                    BigInteger maxTime = new BigInteger("0");
+                    ConcurrentLinkedQueue<BigInteger> reqBigInt = new ConcurrentLinkedQueue<>();
+                    for(RequestTiming time : reqList){
+                        reqBigInt.add(new BigInteger(time.getRequestTime() + ""));
+                    }
+
+                    // Check the maximum request time held by the current iterated instance
+                    if(!reqBigInt.isEmpty()){
+                        maxTime = Collections.max(reqBigInt);
+                    }
+
+                    System.out.println("MAX VALUE FROM THE LIST: " + maxTime.toString());
+
+                    // Check if the request to be processed will take more than 7 seconds to be processed by iterated instance
+                    BigInteger diff = maxTime.subtract(estimatedTime);
+
+                    // if the machine takes more than 7 seconds to process each value it looks for other machine
+                    System.out.println("This is the time " + instanceId + " has to process its requests: " + metric.getTimeToFinnishEveryRequestProcessing());
+                    if (metric.getTimeToFinnishEveryRequestProcessing() > MINIMUM_TIME_TO_WAIT) {
+                        continue;
+                    }
+                    finalResult.put(entry.getValue(), estimatedTime);
+                    return finalResult;
+
+                }else{ // We are processing the first request
+                    finalResult.put(entry.getValue(), estimatedTime);
                     return finalResult;
                 }
 
@@ -218,23 +298,24 @@ public class EC2LoadBalancer {
         * */
         if (result == null){
             try {
-//                // launch instance
-//                Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
-//                while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
-//                    TimeUnit.SECONDS.sleep(5);
-//                }
+                // launch new instance
+                Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
+                while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
+                    TimeUnit.SECONDS.sleep(5);
+                }
                 System.out.println("returning new instance");
-//                Instance instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
-//                tryNewInstance(instance.getPublicIpAddress());
-//                finalResult.put(instance, response);
-//                return finalResult;
+                Instance instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
+                tryNewInstance(instance.getPublicIpAddress());
+                finalResult.put(instance, estimatedTime);
+                return finalResult;
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
 
         }
 
-        finalResult.put(result, response);
+        finalResult.put(result, estimatedTime);
         return finalResult;
     }
 
@@ -243,16 +324,18 @@ public class EC2LoadBalancer {
         String instanceId = newInstance.getInstanceId();
         try {
 
-            ItemCollection<QueryOutcome> reqTimes = (DynamoDBGeneralOperations.queryTable("MSSCentralTable", "numberToBeFactored", num.toString()));
-            String reqTime="NA";
-            if(reqTimes.iterator().hasNext()) {
-                reqTime = reqTimes.iterator().next().get("timeToFactorize").toString();
-                System.out.println("reqTime: " + reqTime);
+//            ItemCollection<QueryOutcome> reqTimes = (DynamoDBGeneralOperations.queryTable("MSSCentralTable", "numberToBeFactored", num.toString()));
+//            String reqTime="NA";
+//
+//            // Gets direct request time if exists in DynamoDB
+//            if(reqTimes.iterator().hasNext()) {
+//                reqTime = reqTimes.iterator().next().get("timeToFactorize").toString();
+//                System.out.println("reqTime: " + reqTime);
+//            }
 
-            }
+            String reqTime = response.toString();
 
             IMetric metricToUpdate;
-
 
             if(machineCurrentMetric.containsKey(instanceId)) {
 
@@ -261,26 +344,27 @@ public class EC2LoadBalancer {
                     //update cost;
                     metricToUpdate.setCost(metricToUpdate.getCost().add(response));
 
-                    //update time
+                    //update time (adds request time)
                     machineCurrentMetric.get(instanceId).addToReqList(reqTime);
 
                 } else {
                     //update cost;
                     metricToUpdate.setCost(metricToUpdate.getCost().subtract(response));
 
-                    //update time
+                    //update time (subtracts request time)
                     machineCurrentMetric.get(instanceId).subFromReqList(reqTime);
                 }
 
-            }else{
+            } else { // adds new instance and metric to Load Balancer list of WebServer current metric
                 metricToUpdate = new IMetric();
                 metricToUpdate.setCost(response);
-                metricToUpdate.addToReqList(reqTime.toString());
+                metricToUpdate.addToReqList(reqTime);
 
                 machineCurrentMetric.put(instanceId, metricToUpdate);
             }
 
-            System.out.println((toAdd ? "Added " : "Subtracted ") + response + " pair key-value: <" + instanceId + ":" + ">");
+//            System.out.println((toAdd ? "Added " : "Subtracted ") + response + " pair key-value: <" + instanceId + ":" + ">");
+            System.out.println((toAdd ? "Added " : "Subtracted ") + reqTime + " to list of reqTimes of instance #" + instanceId);
         }catch (Exception e){
             e.printStackTrace();
         }

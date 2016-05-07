@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class IMetric{
 
 
-    private ConcurrentLinkedQueue<String> reqList;
+    private ConcurrentLinkedQueue<RequestTiming> reqList;
     private BigInteger cost;
     private double CPUUtil;
 
@@ -16,7 +16,7 @@ public class IMetric{
     }
 
 
-    public ConcurrentLinkedQueue< String> getReqList() {
+    public ConcurrentLinkedQueue<RequestTiming> getReqList() {
         return reqList;
     }
 
@@ -29,13 +29,22 @@ public class IMetric{
     }
 
     public void addToReqList(String time) {
-        System.out.println("REQLIST: "+reqList);
-        this.reqList.add(time);
+        System.out.println("REQLIST: " + reqList);
+        this.reqList.add(new RequestTiming(new Long(time)));
     }
 
     public void subFromReqList(String time) {
-        System.out.println("REQLIST: "+reqList);
-        this.reqList.remove(time);
+        System.out.println("REQLIST: " + reqList);
+        removeOldestEqualRequestTime(new Long(time));
+    }
+
+    // Removes the oldest request time equal to oldestTime
+    private void removeOldestEqualRequestTime(long oldestTime) {
+        for (RequestTiming req : this.reqList) {
+            if (req.getRequestTime() == oldestTime) {
+                this.reqList.remove(req);
+            }
+        }
     }
 
     public void setCost(BigInteger cost) {
@@ -46,5 +55,13 @@ public class IMetric{
         this.CPUUtil = CPUUtil;
     }
 
+    public long getTimeToFinnishEveryRequestProcessing(){
+
+        long totalTime = 0;
+        for (RequestTiming req : reqList) {
+            totalTime = totalTime + req.getTimeToFinnishProcessing();
+        }
+        return totalTime;
+    }
 
 }

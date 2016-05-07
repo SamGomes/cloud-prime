@@ -71,6 +71,7 @@ public class DynamoDBGeneralOperations {
     private static final String TABLE_NAME = "MSSCentralTable";
     private static final String PRIMARY_KEY = "numberToBeFactored";
     private static final String COST_ATTRIBUTE = "cost";
+    private static final String TIME_TO_FACTORIZE_ATTRIBUTE = "timeToFactorize";
     private static final String INSTANCE_PRIMARY_KEY = "instanceId";
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
     private static int ESTIMATED_COST = 1;
@@ -196,7 +197,8 @@ public class DynamoDBGeneralOperations {
             QueryResult result = dynamoDB.query(queryRequest);
             if (result.getCount() > 0){
                 for (Map<String,AttributeValue> item: result.getItems()){
-                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
+//                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
+                    numberCostTuple = new BigInteger(item.get(TIME_TO_FACTORIZE_ATTRIBUTE).getS());
                     return numberCostTuple;
                 }
             }
@@ -233,14 +235,16 @@ public class DynamoDBGeneralOperations {
 
             for (Map<String, AttributeValue> item : lowerClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
-                AttributeValue cost = item.get(COST_ATTRIBUTE);
+//                AttributeValue cost = item.get(COST_ATTRIBUTE);
+                AttributeValue cost = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
                 numbersFactorized.add(new BigInteger(value.getS()));
                 costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
             }
 
             for (Map<String, AttributeValue> item : higherClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
-                AttributeValue cost = item.get(COST_ATTRIBUTE);
+//                AttributeValue cost = item.get(COST_ATTRIBUTE);
+                AttributeValue cost = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
                 numbersFactorized.add(new BigInteger(value.getS()));
                 costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
             }
