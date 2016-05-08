@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -25,19 +26,20 @@ public class WebServer{
  
 
 	private static String myIP;
-    private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
+    private static final String MSS_CENTRAL_TABLE = "MSSCentralTable";
     private static final String CENTRAL_TABLE_TIME_ATTRIBUTE = "timeToFactorize";
     private static final String CENTRAL_TABLE_COST_ATTRIBUTE = "cost";
     private static final float MINIMUM_CPU_TO_REGISTER_STATS = 5;
     private static final long NANO_TO_MILI = 1000000;
     private static String instanceId;
+    private static ArrayList knownNumbers = new ArrayList();
 
  	private static DynamoDBWebServerGeneralOperations dbgo;
 
 	public static void main(String[] args) throws Exception {
 		dbgo.init();
 		myIP = InetAddress.getLocalHost().getHostAddress();
-		dbgo.createTable("MSSCentralTable", "numberToBeFactored",
+		dbgo.createTable(MSS_CENTRAL_TABLE, "numberToBeFactored",
                 new String[] {CENTRAL_TABLE_COST_ATTRIBUTE, CENTRAL_TABLE_TIME_ATTRIBUTE});
 
         //instanceId = getInstanceId();
@@ -69,9 +71,12 @@ public class WebServer{
 		System.out.println("date: "+formatedDate);
         if (previousCPU <= 5){
             try {
-                dbgo.insertTuple("MSSCentralTable",
-                        new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored),
-                                CENTRAL_TABLE_COST_ATTRIBUTE, line, CENTRAL_TABLE_TIME_ATTRIBUTE, String.valueOf(timeToFactor)});
+                if(!knownNumbers.contains(numberToBeFactored)) {
+                    knownNumbers.add(numberToBeFactored);
+                    dbgo.insertTuple(MSS_CENTRAL_TABLE,
+                            new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored),
+                                    CENTRAL_TABLE_COST_ATTRIBUTE, line, CENTRAL_TABLE_TIME_ATTRIBUTE, String.valueOf(timeToFactor)});
+                }
 
             }catch(Exception e){
                 e.printStackTrace();

@@ -21,6 +21,12 @@ import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.services.dynamodbv2.document.ItemCollection;
+import com.amazonaws.services.dynamodbv2.document.QueryOutcome;
+import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
 
@@ -122,16 +128,24 @@ public class DynamoDBWebServerGeneralOperations {
         // System.out.println("Table Description: " + tableDescription);        
     }
 
-    static void queryTable(String tableName,String attribute,Condition condition) throws Exception {
-    
-        System.out.println("createTable! tableName: "+tableName+"  ,condition: "+condition+" attribute: "+attribute);
+    static ItemCollection<QueryOutcome> queryTable(String tableName, String var, String val) throws Exception {
 
-         HashMap scanFilter = new HashMap();
+        DynamoDB dynamoDBT = new DynamoDB(dynamoDB);
 
-         scanFilter.put(attribute, condition);
-         ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-         ScanResult scanResult = dynamoDB.scan(scanRequest);
-         System.out.println("Result: " + scanResult);
+
+        Table table = dynamoDBT.getTable(tableName);
+
+        System.out.println("varVal: "+var +" = "+val);
+
+        QuerySpec spec = new QuerySpec()
+                .withKeyConditionExpression(var+" = :v_id")
+                .withScanIndexForward(true)
+                .withValueMap(new ValueMap()
+                        .withString(":v_id", val));
+
+        ItemCollection<QueryOutcome> items = table.query(spec);
+
+        return items;
     }
     
     static void insertTuple(String tableName,String[] attrAndValues) throws Exception {
