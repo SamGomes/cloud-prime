@@ -48,6 +48,7 @@ public class EC2LBGeneralOperations {
 
     
     private static int runningInstances = 0;
+    private static int activeInstances = 0;
     private static ArrayList<Instance> instances;
     private static ConcurrentHashMap<String,Instance> runningInstancesArray;
     private static ArrayList<String> LoadBalancerExpectionList;
@@ -156,14 +157,18 @@ public class EC2LBGeneralOperations {
     static int getRunningInstances(){
          return runningInstances;
      }
+    static int getActiveInstances(){
+        return activeInstances;
+    }
 
-    public static void updateRunningInstances(){
+    public static synchronized void updateRunningInstances(){
         describeInstancesRequest = ec2.describeInstances();
         reservations = describeInstancesRequest.getReservations();
 
         instances.clear();
         runningInstancesArray.clear();
         runningInstances = 0;
+        activeInstances = 0;
         
         for (Reservation reservation : reservations) {
             instances.addAll(reservation.getInstances());
@@ -177,6 +182,9 @@ public class EC2LBGeneralOperations {
                     runningInstances++;
                     //runningInstancesArray.add(instance);
                     runningInstancesArray.put(instance.getInstanceId(),instance);
+                }
+                if (!state.equals("terminated")){
+                    activeInstances++;
                 }
             }else{
                 System.out.println("Found Load Balancer " + instance.getPrivateIpAddress());

@@ -30,18 +30,18 @@ public class IMetric{
 
     public void addToReqList(String time) {
         System.out.println("REQLIST: " + reqList);
-        this.reqList.add(new RequestTiming(new Long(time)));
+        this.reqList.add(new RequestTiming(new BigInteger(time)));
     }
 
     public void subFromReqList(String time) {
         System.out.println("REQLIST: " + reqList);
-        removeOldestEqualRequestTime(new Long(time));
+        removeOldestEqualRequestTime(new BigInteger(time));
     }
 
     // Removes the oldest request time equal to oldestTime
-    private void removeOldestEqualRequestTime(long oldestTime) {
+    private void removeOldestEqualRequestTime(BigInteger oldestTime) {
         for (RequestTiming req : this.reqList) {
-            if (req.getRequestTime() == oldestTime) {
+            if (req.getRequestTime().equals(oldestTime)) {
                 this.reqList.remove(req);
             }
         }
@@ -62,13 +62,13 @@ public class IMetric{
         this.CPUUtil = CPUUtil;
     }
 
-    public long getTimeToFinnishEveryRequestProcessing(){
+    public BigInteger getTimeToFinnishEveryRequestProcessing(){
 
-        long timeToFinnish = 0;
+        BigInteger timeToFinnish = BigInteger.ZERO;
 
         for(RequestTiming time : reqList){
-            long temp = time.getRequestTime();
-            if(temp > timeToFinnish) {
+            BigInteger temp = time.getRequestTime();
+            if(temp.compareTo(timeToFinnish)==1) {
                 timeToFinnish = temp;
             }
         }
