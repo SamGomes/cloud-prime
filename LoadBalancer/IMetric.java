@@ -6,7 +6,7 @@ public class IMetric{
 
 
     private ConcurrentLinkedQueue<RequestTiming> reqList;
-    private BigInteger cost;
+    private BigInteger cost; // AKA Recalcs
     private double CPUUtil;
 
     public IMetric(){
@@ -51,17 +51,29 @@ public class IMetric{
         this.cost = cost;
     }
 
+    public void addCost(BigInteger cost) {
+        this.cost.add(cost);
+    }
+    public void subCost(BigInteger cost) {
+        this.cost.subtract(cost);
+    }
+
     public void setCPUUtil(double CPUUtil) {
         this.CPUUtil = CPUUtil;
     }
 
     public long getTimeToFinnishEveryRequestProcessing(){
 
-        long totalTime = 0;
-        for (RequestTiming req : reqList) {
-            totalTime = totalTime + req.getTimeToFinnishProcessing();
+        long timeToFinnish = 0;
+
+        for(RequestTiming time : reqList){
+            long temp = time.getRequestTime();
+            if(temp > timeToFinnish) {
+                timeToFinnish = temp;
+            }
         }
-        return totalTime;
+
+        return timeToFinnish;
     }
 
 }

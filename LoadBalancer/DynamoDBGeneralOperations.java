@@ -77,7 +77,12 @@ public class DynamoDBGeneralOperations {
     private static int ESTIMATED_COST = 1;
     private static int DIRECT_COST = 2;
     private static int DECIMAL_PlACES = 6;
+
+    // numberToFactorized : cost
     static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
+
+    // numberToFactorized : estimatedTime
+    static HashMap<BigInteger, BigInteger> reqTimes = new HashMap<>();
 
     private static Table table;
     static void init() throws Exception {
@@ -174,13 +179,14 @@ public class DynamoDBGeneralOperations {
     }
 
 
-    static BigInteger estimateCostScan(BigInteger estimate){
+    static BigInteger[] estimateCostScan(BigInteger estimate){
 
         ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
 
         try{
 
             BigInteger numberCostTuple;
+            BigInteger numberReqTimeTuple;
 
             Condition hashKeyCondition = new Condition()
                     .withComparisonOperator(ComparisonOperator.EQ.toString())
@@ -198,8 +204,12 @@ public class DynamoDBGeneralOperations {
             if (result.getCount() > 0){
                 for (Map<String,AttributeValue> item: result.getItems()){
 //                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
-                    numberCostTuple = new BigInteger(item.get(TIME_TO_FACTORIZE_ATTRIBUTE).getS());
-                    return numberCostTuple;
+                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
+                    numberReqTimeTuple = new BigInteger(item.get(TIME_TO_FACTORIZE_ATTRIBUTE).getS());
+                    return new BigInteger[]{
+                            numberCostTuple,
+                            numberReqTimeTuple
+                    };
                 }
             }
 
@@ -235,18 +245,20 @@ public class DynamoDBGeneralOperations {
 
             for (Map<String, AttributeValue> item : lowerClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
-//                AttributeValue cost = item.get(COST_ATTRIBUTE);
-                AttributeValue cost = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
+                AttributeValue cost = item.get(COST_ATTRIBUTE);
+                AttributeValue reqTime = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
                 numbersFactorized.add(new BigInteger(value.getS()));
                 costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
+                reqTimes.put(new BigInteger(value.getS()),new BigInteger(reqTime.getS()));
             }
 
             for (Map<String, AttributeValue> item : higherClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
-//                AttributeValue cost = item.get(COST_ATTRIBUTE);
-                AttributeValue cost = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
+                AttributeValue cost = item.get(COST_ATTRIBUTE);
+                AttributeValue reqTime = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
                 numbersFactorized.add(new BigInteger(value.getS()));
                 costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
+                reqTimes.put(new BigInteger(value.getS()),new BigInteger(reqTime.getS()));
             }
         }catch (Exception e){
             e.printStackTrace();
@@ -254,10 +266,18 @@ public class DynamoDBGeneralOperations {
 
         BigInteger[] array = new BigInteger[numbersFactorized.size()];
         array = numbersFactorized.toArray(array);
-        return calculateEstimatedCost(array, estimate);
+
+        BigInteger estimatedCost = calculateEstimatedCost(array, estimate, costs);
+        BigInteger estimatedReqTime = calculateEstimatedCost(array, estimate, reqTimes);
+
+        return  new BigInteger[]{
+                estimatedCost,
+                estimatedReqTime
+        };
+//        return calculateEstimatedCost(array, estimate);
     }
 
-    public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val){
+    public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val, HashMap<BigInteger, BigInteger> factorizedMetric){
 
         // Find nearest number factored key interval
         NavigableSet<BigInteger> values = new TreeSet<BigInteger>();
@@ -274,9 +294,9 @@ public class DynamoDBGeneralOperations {
             if(h == null || l == null) {
 
                 if(h == null) {
-                    finalCost = (value.multiply(new BigDecimal(costs.get(l))).divide(new BigDecimal(l), DECIMAL_PlACES, RoundingMode.CEILING));
+                    finalCost = (value.multiply(new BigDecimal(factorizedMetric.get(l))).divide(new BigDecimal(l), DECIMAL_PlACES, RoundingMode.CEILING));
                 } else {
-                    finalCost = (value.multiply(new BigDecimal(costs.get(h))).divide(new BigDecimal(h), DECIMAL_PlACES, RoundingMode.CEILING));
+                    finalCost = (value.multiply(new BigDecimal(factorizedMetric.get(h))).divide(new BigDecimal(h), DECIMAL_PlACES, RoundingMode.CEILING));
                 }
             } else {
 
@@ -286,7 +306,7 @@ public class DynamoDBGeneralOperations {
                 // Proportions
                 BigDecimal lowerProportion = BigDecimal.ONE.subtract((value.subtract(lower)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
                 BigDecimal higherProportion = BigDecimal.ONE.subtract((higher.subtract(value)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
-                finalCost = (lowerProportion.multiply(new BigDecimal(costs.get(lower.toBigInteger()))).add(higherProportion.multiply(new BigDecimal(costs.get(higher.toBigInteger())))));
+                finalCost = (lowerProportion.multiply(new BigDecimal(factorizedMetric.get(lower.toBigInteger()))).add(higherProportion.multiply(new BigDecimal(costs.get(higher.toBigInteger())))));
             }
 
             finalCostRounded = finalCost.setScale(0, BigDecimal.ROUND_HALF_UP);
