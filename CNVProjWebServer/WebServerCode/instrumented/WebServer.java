@@ -29,13 +29,13 @@ public class WebServer{
     private static final String MSS_CENTRAL_TABLE = "MSSCentralTable";
     private static final String CENTRAL_TABLE_TIME_ATTRIBUTE = "timeToFactorize";
     private static final String CENTRAL_TABLE_COST_ATTRIBUTE = "cost";
-    private static final float MINIMUM_CPU_TO_REGISTER_STATS = 5;
     private static final long NANO_TO_MILI = 1000000;
     private static String instanceId;
     private static ArrayList knownNumbers = new ArrayList();
 
  	private static DynamoDBWebServerGeneralOperations dbgo;
 
+    private static HttpServer server;
 	public static void main(String[] args) throws Exception {
 		dbgo.init();
 		myIP = InetAddress.getLocalHost().getHostAddress();
@@ -43,7 +43,7 @@ public class WebServer{
                 new String[] {CENTRAL_TABLE_COST_ATTRIBUTE, CENTRAL_TABLE_TIME_ATTRIBUTE});
 
         //instanceId = getInstanceId();
-	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+	    server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
 	    server.setExecutor(null); // creates a default executor
 	    server.start();
@@ -104,92 +104,48 @@ public class WebServer{
     	
         
     	public void handle(final HttpExchange exchange) throws IOException {
- 
+
        
         new Thread(new Runnable(){
-			
+
 			//@Override
 			public void run() {
-				Headers responseHeaders = exchange.getResponseHeaders();
-				responseHeaders.set("Content-Type", "text/html");
 				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 				BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
+                OutputStream os = null;
 				try{
-                    //float cpuBeforeFactorization = getInstanceCPU(instanceId);
                     long startTime = System.nanoTime();
-				    Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain "+ numberToBeFactored);
-				    pro.waitFor();
+
+                    Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain " + numberToBeFactored);
+                    pro.waitFor();
+
                     long endTime = System.nanoTime();
 
-			        String response = saveStats("factorization result: ",numberToBeFactored,
+                    String response = saveStats("factorization result: ",numberToBeFactored,
                             Thread.currentThread().getId(), pro.getInputStream(),
                             (endTime-startTime)/NANO_TO_MILI, 4);
-					System.out.print(response+"\n");
+                    System.out.print(response+"\n");
 
-			        exchange.sendResponseHeaders(200, response.length());
-			        OutputStream os = exchange.getResponseBody();
-			        os.write(response.getBytes());
-			        os.close();
-		        }catch(Exception e){}
-			}
+                    try{
+                    synchronized(this)(
+                        exchange.sendResponseHeaders(200, response.length());
+                        os = exchange.getResponseBody();
+                        os.write(response.getBytes());
+
+
+                        os.flush();
+                        os.close();
+                    }catch(IOException e){e.printStackTrace();}
+
+		        }catch(Exception e){
+                    e.printStackTrace();
+                }finally {
+
+                }
+            }
 		}).start();
 
         }
     }
 
-    public static String getInstanceId(){
-        String EC2Id = "";
-        String inputLine;
-        try{
-            URL EC2MetaData = new URL("http://169.254.169.254/latest/meta-data/instance-id");
-            URLConnection EC2MD = EC2MetaData.openConnection();
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(
-                            EC2MD.getInputStream()));
-            while ((inputLine = in.readLine()) != null)
-            {
-                EC2Id = inputLine;
-            }
-            in.close();
-        } catch (IOException e){
-            e.printStackTrace();
-        }
-        System.out.println(EC2Id);
-        return EC2Id;
-    }
-
-
-    static float getInstanceCPU(String instanceId){
-        double dpWAverage=0;
-        float overallCPUAverage=0;
-        long offsetInMilliseconds = 1000 * 10;
-        Dimension instanceDimension = new Dimension();
-        instanceDimension.setName("InstanceId");
-        String id = instanceId;
-
-        instanceDimension.setValue(id);
-        GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
-                .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
-                .withNamespace("AWS/EC2")
-                .withPeriod(new Integer(60))
-                .withMetricName("CPUUtilization")
-                .withStatistics(new String[]{"Average"})
-                .withDimensions(new Dimension[]{instanceDimension})
-                .withEndTime(new Date());
-        GetMetricStatisticsResult getMetricStatisticsResult =
-                EC2WSGeneralOperations.cloudWatch.getMetricStatistics(request);
-        List datapoints = getMetricStatisticsResult.getDatapoints();
-
-        int datapointCount=0;
-        Iterator it = datapoints.iterator();
-        while (it.hasNext()) {
-            datapointCount++;
-            dpWAverage += 1/datapointCount * ((Datapoint) it.next()).getAverage().doubleValue();
-        }
-
-        System.out.println(" CPU utilization for instance " + id + " = " + dpWAverage);
-        overallCPUAverage += dpWAverage;
-
-        return overallCPUAverage;
-    }
 }

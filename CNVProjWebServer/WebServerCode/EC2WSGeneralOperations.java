@@ -21,19 +21,14 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.HttpClientBuilder;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class EC2LBGeneralOperations {
+public class EC2WSGeneralOperations {
 
     /*
      * Before running the code:
@@ -53,7 +48,6 @@ public class EC2LBGeneralOperations {
 
     
     private static int runningInstances = 0;
-    private static int activeInstances = 0;
     private static ArrayList<Instance> instances;
     private static ConcurrentHashMap<String,Instance> runningInstancesArray;
     private static ArrayList<String> LoadBalancerExpectionList;
@@ -163,47 +157,13 @@ public class EC2LBGeneralOperations {
          return runningInstances;
      }
 
-    public static boolean tryNewInstance(String instancePublicAddress){
-
-        HttpClient client = HttpClientBuilder.create().build();
-        String url = "http://"+instancePublicAddress+":8000/f.html?n=2";
-        HttpGet request = new HttpGet(url);
-        HttpResponse response;
-        int statusCode = 404;
-
-        // While the response code is not 200 keep sending requests
-        // This will ensure the web server is already running when we forward the request
-
-        try {
-            response = client.execute(request);
-            statusCode = response.getStatusLine().getStatusCode();
-            System.out.println("Response: "+statusCode);
-        } catch (IOException e) {
-            try {
-                Thread.sleep(5000);
-                System.out.println("New instance unreachable");
-            } catch (InterruptedException e1) {
-                e.printStackTrace();
-            }
-        }
-        if(statusCode != 200){
-            return false;
-        }
-        return true;
-    }
-
-    static synchronized int getActiveInstances(){
-        return activeInstances;
-    }
-
-    public synchronized static void updateRunningInstances(){
+    public static void updateRunningInstances(){
         describeInstancesRequest = ec2.describeInstances();
         reservations = describeInstancesRequest.getReservations();
 
         instances.clear();
         runningInstancesArray.clear();
         runningInstances = 0;
-        activeInstances = 0;
         
         for (Reservation reservation : reservations) {
             instances.addAll(reservation.getInstances());
@@ -213,13 +173,10 @@ public class EC2LBGeneralOperations {
             if (!LoadBalancerExpectionList.contains(instance.getPublicIpAddress())){
                 String state = instance.getState().getName();
 
-                if (state.equals("running") && tryNewInstance(instance.getPublicIpAddress())){
+                if (state.equals("running")){
                     runningInstances++;
                     //runningInstancesArray.add(instance);
                     runningInstancesArray.put(instance.getInstanceId(),instance);
-                }
-                if (!state.equals("terminated")){
-                    activeInstances++;
                 }
             }else{
                 System.out.println("Found Load Balancer " + instance.getPrivateIpAddress());

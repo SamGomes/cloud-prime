@@ -52,10 +52,11 @@ public class IMetric{
     }
 
     public void addCost(BigInteger cost) {
-        this.cost.add(cost);
+        this.cost= this.cost.add(cost);
     }
     public void subCost(BigInteger cost) {
-        this.cost.subtract(cost);
+
+        this.cost=this.cost.subtract(cost);
     }
 
     public void setCPUUtil(double CPUUtil) {
