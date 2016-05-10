@@ -101,7 +101,7 @@ public class DynamoDBWebServerGeneralOperations {
             CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
                 .withKeySchema(new KeySchemaElement[]{new KeySchemaElement().withAttributeName(keyAttr).withKeyType(KeyType.HASH)})
                 .withAttributeDefinitions(new AttributeDefinition[]{new AttributeDefinition().withAttributeName(keyAttr).withAttributeType(ScalarAttributeType.S)})
-                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(new Long(1)).withWriteCapacityUnits(new Long(1)));
+                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(new Long(3)).withWriteCapacityUnits(new Long(3)));
                 TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
             System.out.println("Created Table: " + createdTableDescription);
 

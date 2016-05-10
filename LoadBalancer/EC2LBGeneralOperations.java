@@ -18,14 +18,20 @@ import com.amazonaws.AmazonClientException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
+import com.amazonaws.services.cloudwatch.model.Datapoint;
+import com.amazonaws.services.cloudwatch.model.Dimension;
+import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
+import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClientBuilder;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.io.IOException;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class EC2LBGeneralOperations {
@@ -49,13 +55,19 @@ public class EC2LBGeneralOperations {
     
     private static int runningInstances = 0;
     private static int activeInstances = 0;
+    private static int MIN_INSTANCES = 1;
+    private static int MAX_INSTANCES = 5;
+    private static int NUMBER_INSTANCES_CPU_ABOVE_60 = 0;
     private static ArrayList<Instance> instances;
     private static ConcurrentHashMap<String,Instance> runningInstancesArray;
+    private static ArrayList<String> instancesBeingStartedArray = new ArrayList<>();
     private static ArrayList<String> LoadBalancerExpectionList;
     private static Timer timer = new Timer();
     private static DescribeInstancesResult describeInstancesRequest;
     private static List<Reservation> reservations;
-    private static int TIME_TO_REFRESH_INSTANCES = 5000;
+    private static int TIME_TO_REFRESH_INSTANCES = 30000;
+    private static boolean isLaunchingInstance = false;
+    private static final String AMI_ID = "ami-83f206e3";
       
     /**
      * The only information needed to create a client are security credentials
@@ -106,12 +118,10 @@ public class EC2LBGeneralOperations {
     static Instance startInstance( DescribeInstancesResult describeInstancesRequest,List<Reservation> reservations,ArrayList<Instance> instances,String role,String ami) throws Exception {
 
         System.out.println("runningInstances: " + runningInstances + ".");
-
         System.out.println("Starting a new instance.");
 
         RunInstancesRequest runInstancesRequest =
                 new RunInstancesRequest();
-
 
         runInstancesRequest.withImageId(ami)
                 .withInstanceType("t2.micro")
@@ -126,14 +136,13 @@ public class EC2LBGeneralOperations {
         Instance newInstanceId = runInstancesResult.getReservation().getInstances()
                 .get(0);
 
+        tryNewInstance(newInstanceId.getPublicIpAddress());
+
         runningInstances++;
         return newInstanceId;
     }
     
     static void terminateInstance(String instanceId, ArrayList instances) throws Exception {
-        
-        System.out.println("Terminating instance.");
-        
          TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
          termInstanceReq.withInstanceIds(instanceId);
          ec2.terminateInstances(termInstanceReq);
@@ -164,30 +173,71 @@ public class EC2LBGeneralOperations {
     public static synchronized void updateRunningInstances(){
         describeInstancesRequest = ec2.describeInstances();
         reservations = describeInstancesRequest.getReservations();
-
         instances.clear();
-        runningInstancesArray.clear();
         runningInstances = 0;
         activeInstances = 0;
-        
+
         for (Reservation reservation : reservations) {
             instances.addAll(reservation.getInstances());
         }
-        
+
+        if (instances.size() == 0){
+            try {
+                isLaunchingInstance = true;
+                startInstance(null,null,null,null,AMI_ID);
+                isLaunchingInstance = false;
+            } catch (Exception e) {
+                System.out.println("Unable to start instance");
+            }
+        }
+        //Build the running instances array
         for(Instance instance :instances){
             if (!LoadBalancerExpectionList.contains(instance.getPublicIpAddress())){
                 String state = instance.getState().getName();
-
-                if (state.equals("running")){
-                    runningInstances++;
-                    //runningInstancesArray.add(instance);
-                    runningInstancesArray.put(instance.getInstanceId(),instance);
-                }
-                if (!state.equals("terminated")){
-                    activeInstances++;
+                if(!instancesBeingStartedArray.contains(instance.getInstanceId())){
+                    if (state.equals("running") && tryNewInstance(instance.getPublicIpAddress())){
+                        runningInstances++;
+                        runningInstancesArray.put(instance.getInstanceId(),instance);
+                    }
+                    if (!state.equals("terminated")){
+                        activeInstances++;
+                    }
+                }else{
+                    if (tryNewInstance(instance.getPublicIpAddress())){
+                        isLaunchingInstance = false;
+                        instancesBeingStartedArray.remove(instance.getInstanceId());
+                    }
                 }
             }else{
                 System.out.println("Found Load Balancer " + instance.getPrivateIpAddress());
+            }
+        }
+        // Check if any instance can be terminated or if the load of the instances is high
+        for (String instance: runningInstancesArray.keySet()){
+            if (getInstanceCPU(instance) < 30 && runningInstancesArray.size() > MIN_INSTANCES){
+                try {
+                    terminateInstance(instance,null);
+                    runningInstancesArray.remove(instance);
+                } catch (Exception e) {
+                    System.out.println("Unable to stop instance");
+                    e.printStackTrace();
+                }
+            }
+            if (getInstanceCPU(instance) > 60
+                    && runningInstancesArray.size() < MAX_INSTANCES
+                    && !isLaunchingInstance){
+                NUMBER_INSTANCES_CPU_ABOVE_60++;
+            }
+        }
+        // If all instances have their CPU load above 60%, launch a new one
+        if (NUMBER_INSTANCES_CPU_ABOVE_60 == runningInstancesArray.size() && !isLaunchingInstance){
+            try {
+                isLaunchingInstance = true;
+                NUMBER_INSTANCES_CPU_ABOVE_60 = 0;
+                Instance newInstance = startInstance(null,null,null,null,AMI_ID);
+                instancesBeingStartedArray.add(newInstance.getInstanceId());
+            } catch (Exception e) {
+                System.out.println("Unable to start instance");
             }
         }
     }
@@ -213,5 +263,64 @@ public class EC2LBGeneralOperations {
         DescribeInstancesRequest describeInstanceRequest = new DescribeInstancesRequest().withInstanceIds(instanceId);
         DescribeInstancesResult describeInstanceResult = ec2.describeInstances(describeInstanceRequest);
         return describeInstanceResult.getReservations().get(0).getInstances().get(0);
+    }
+
+    public static boolean tryNewInstance(String instancePublicAddress){
+
+        HttpClient client = HttpClientBuilder.create().build();
+        String url = "http://"+instancePublicAddress+":8000/f.html?n=2";
+        HttpGet request = new HttpGet(url);
+        HttpResponse response;
+        int statusCode = 404;
+
+        // While the response code is not 200 keep sending requests
+        // This will ensure the web server is already running when we forward the request
+        //while(statusCode != 200){
+            try {
+                response = client.execute(request);
+                statusCode = response.getStatusLine().getStatusCode();
+            } catch (IOException e) {
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e1) {
+                    System.out.println("Instance still unreachable");
+                }
+            }
+//        }
+        if (statusCode != 200){
+            return false;
+        }
+        return true;
+    }
+
+    static float getInstanceCPU(String instanceId){
+        double dpWAverage=0;
+        float overallCPUAverage=0;
+        long offsetInMilliseconds = 1000 * 60 * 2;
+        Dimension instanceDimension = new Dimension();
+        instanceDimension.setName("InstanceId");
+        String id = instanceId;
+
+        instanceDimension.setValue(id);
+        GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
+                .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
+                .withNamespace("AWS/EC2")
+                .withPeriod(60)
+                .withMetricName("CPUUtilization")
+                .withStatistics("Average")
+                .withDimensions(instanceDimension)
+                .withEndTime(new Date());
+        GetMetricStatisticsResult getMetricStatisticsResult =
+                EC2LBGeneralOperations.cloudWatch.getMetricStatistics(request);
+        List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
+
+        int datapointCount=0;
+        for (Datapoint dp : datapoints) {
+            datapointCount++;
+            dpWAverage += 1/datapointCount * dp.getAverage();
+        }
+        overallCPUAverage += dpWAverage;
+
+        return overallCPUAverage;
     }
 }

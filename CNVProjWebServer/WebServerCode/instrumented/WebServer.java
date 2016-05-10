@@ -19,12 +19,14 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 
 public class WebServer{
- 
 
-	private static String myIP;
+
     private static final String INSTANCE_LOAD_TABLE_NAME = "MSSInstanceLoad";
     private static final String CENTRAL_TABLE_TIME_ATTRIBUTE = "timeToFactorize";
     private static final String CENTRAL_TABLE_COST_ATTRIBUTE = "cost";
@@ -35,18 +37,17 @@ public class WebServer{
  	private static DynamoDBWebServerGeneralOperations dbgo;
 
 	public static void main(String[] args) throws Exception {
-		dbgo.init();
-		myIP = InetAddress.getLocalHost().getHostAddress();
-		dbgo.createTable("MSSCentralTable", "numberToBeFactored",
+        DynamoDBWebServerGeneralOperations.init();
+        DynamoDBWebServerGeneralOperations.createTable("MSSCentralTable", "numberToBeFactored",
                 new String[] {CENTRAL_TABLE_COST_ATTRIBUTE, CENTRAL_TABLE_TIME_ATTRIBUTE});
 
         //instanceId = getInstanceId();
 	    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 	    server.createContext("/f.html", new MyHandler());
-	    server.setExecutor(null); // creates a default executor
+	    //server.setExecutor(null); // creates a default executor
+        server.setExecutor(new ThreadPoolExecutor(5, 20, 1200, TimeUnit.SECONDS, new ArrayBlockingQueue(100))); // creates a default executor
 	    server.start();
 	}
- 
 
 	private static String saveStats(String name,BigInteger numberToBeFactored,
                                     long id, InputStream ins, long timeToFactor, float previousCPU) throws Exception {
@@ -69,7 +70,7 @@ public class WebServer{
 		System.out.println("date: "+formatedDate);
         if (previousCPU <= 5){
             try {
-                dbgo.insertTuple("MSSCentralTable",
+                DynamoDBWebServerGeneralOperations.insertTuple("MSSCentralTable",
                         new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored),
                                 CENTRAL_TABLE_COST_ATTRIBUTE, line, CENTRAL_TABLE_TIME_ATTRIBUTE, String.valueOf(timeToFactor)});
 
@@ -95,40 +96,35 @@ public class WebServer{
 	 }
 
     static class MyHandler implements HttpHandler {
-    	
-    	
-        
+
     	public void handle(final HttpExchange exchange) throws IOException {
- 
-       
-        new Thread(new Runnable(){
-			
-			//@Override
-			public void run() {
-				Headers responseHeaders = exchange.getResponseHeaders();
-				responseHeaders.set("Content-Type", "text/html");
-				HashMap map = queryToMap(exchange.getRequestURI().getQuery());
-				BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
-				try{
-                    //float cpuBeforeFactorization = getInstanceCPU(instanceId);
-                    long startTime = System.nanoTime();
-				    Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain "+ numberToBeFactored);
-				    pro.waitFor();
-                    long endTime = System.nanoTime();
+            new Thread(new Runnable(){
 
-			        String response = saveStats("factorization result: ",numberToBeFactored,
-                            Thread.currentThread().getId(), pro.getInputStream(),
-                            (endTime-startTime)/NANO_TO_MILI, 4);
-					System.out.print(response+"\n");
+                //@Override
+                public void run() {
+                    Headers responseHeaders = exchange.getResponseHeaders();
+                    responseHeaders.set("Content-Type", "text/html");
+                    HashMap map = queryToMap(exchange.getRequestURI().getQuery());
+                    BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
+                    try{
+                        //float cpuBeforeFactorization = getInstanceCPU(instanceId);
+                        long startTime = System.nanoTime();
+                        Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain "+ numberToBeFactored);
+                        pro.waitFor();
+                        long endTime = System.nanoTime();
 
-			        exchange.sendResponseHeaders(200, response.length());
-			        OutputStream os = exchange.getResponseBody();
-			        os.write(response.getBytes());
-			        os.close();
-		        }catch(Exception e){}
-			}
-		}).start();
+                        String response = saveStats("factorization result: ",numberToBeFactored,
+                                Thread.currentThread().getId(), pro.getInputStream(),
+                                (endTime-startTime)/NANO_TO_MILI, 4);
+                        System.out.print(response+"\n");
 
+                        exchange.sendResponseHeaders(200, response.length());
+                        OutputStream os = exchange.getResponseBody();
+                        os.write(response.getBytes());
+                        os.close();
+                    }catch(Exception e){}
+                }
+            }).start();
         }
     }
 

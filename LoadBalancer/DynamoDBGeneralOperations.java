@@ -20,19 +20,16 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
-import com.amazonaws.services.cloudwatch.model.Datapoint;
-import com.amazonaws.services.cloudwatch.model.Dimension;
-import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
-import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
-import com.amazonaws.services.dynamodbv2.document.*;
-import com.amazonaws.services.dynamodbv2.model.*;
-
+import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.services.dynamodbv2.document.ItemCollection;
+import com.amazonaws.services.dynamodbv2.document.QueryOutcome;
+import com.amazonaws.services.dynamodbv2.document.Table;
 import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
 import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
+import com.amazonaws.services.dynamodbv2.model.*;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.*;
 
@@ -79,10 +76,10 @@ public class DynamoDBGeneralOperations {
     private static int DECIMAL_PlACES = 6;
 
     // numberToFactorized : cost
-    static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
+    static HashMap<BigDecimal, BigDecimal> costs = new HashMap<>();
 
     // numberToFactorized : estimatedTime
-    static HashMap<BigInteger, BigInteger> reqTimes = new HashMap<>();
+    static HashMap<BigDecimal, BigDecimal> reqTimes = new HashMap<>();
 
     private static Table table;
     static void init() throws Exception {
@@ -99,16 +96,6 @@ public class DynamoDBGeneralOperations {
         dynamoDB = new AmazonDynamoDBClient(credentials);
         Region usWest2 = Region.getRegion(Regions.US_WEST_2);
         dynamoDB.setRegion(usWest2);
-    }
-
-
-    static void describeTable(String tableName) throws Exception {
-
-        System.out.println("describeTable tableName"+tableName);
-
-        // DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(tableName);
-        // TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
-        // System.out.println("Table Description: " + tableDescription);
     }
 
     static ItemCollection<QueryOutcome> queryTable(String tableName,String var, String val) throws Exception {
@@ -179,14 +166,14 @@ public class DynamoDBGeneralOperations {
     }
 
 
-    static BigInteger[] estimateCostScan(BigInteger estimate){
+    static BigDecimal[] estimateCostScan(BigDecimal estimate){
 
-        ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
+        ArrayList<BigDecimal> numbersFactorized = new ArrayList<>();
 
         try{
 
-            BigInteger numberCostTuple;
-            BigInteger numberReqTimeTuple;
+            BigDecimal numberCostTuple;
+            BigDecimal numberReqTimeTuple;
 
             Condition hashKeyCondition = new Condition()
                     .withComparisonOperator(ComparisonOperator.EQ.toString())
@@ -203,10 +190,9 @@ public class DynamoDBGeneralOperations {
             QueryResult result = dynamoDB.query(queryRequest);
             if (result.getCount() > 0){
                 for (Map<String,AttributeValue> item: result.getItems()){
-//                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
-                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
-                    numberReqTimeTuple = new BigInteger(item.get(TIME_TO_FACTORIZE_ATTRIBUTE).getS());
-                    return new BigInteger[]{
+                    numberCostTuple = new BigDecimal(item.get(COST_ATTRIBUTE).getS());
+                    numberReqTimeTuple = new BigDecimal(item.get(TIME_TO_FACTORIZE_ATTRIBUTE).getS());
+                    return new BigDecimal[]{
                             numberCostTuple,
                             numberReqTimeTuple
                     };
@@ -240,114 +226,90 @@ public class DynamoDBGeneralOperations {
 
             ScanResult higherClosestValue = dynamoDB.scan(scanHigherRequest);
 
-            System.out.println("Query response size " + lowerClosestValue.getItems().size() );
-            System.out.println("Query response size " + higherClosestValue.getItems().size() );
-
             for (Map<String, AttributeValue> item : lowerClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
                 AttributeValue cost = item.get(COST_ATTRIBUTE);
                 AttributeValue reqTime = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
-                numbersFactorized.add(new BigInteger(value.getS()));
-                costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
-                reqTimes.put(new BigInteger(value.getS()),new BigInteger(reqTime.getS()));
+                numbersFactorized.add(new BigDecimal(value.getS()));
+                costs.put(new BigDecimal(value.getS()),new BigDecimal(cost.getS()));
+                reqTimes.put(new BigDecimal(value.getS()),new BigDecimal(reqTime.getS()));
             }
 
             for (Map<String, AttributeValue> item : higherClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
                 AttributeValue cost = item.get(COST_ATTRIBUTE);
                 AttributeValue reqTime = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
-                numbersFactorized.add(new BigInteger(value.getS()));
-                costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
-                reqTimes.put(new BigInteger(value.getS()),new BigInteger(reqTime.getS()));
+                numbersFactorized.add(new BigDecimal(value.getS()));
+                costs.put(new BigDecimal(value.getS()),new BigDecimal(cost.getS()));
+                reqTimes.put(new BigDecimal(value.getS()),new BigDecimal(reqTime.getS()));
             }
         }catch (Exception e){
+            if (e.getCause() instanceof ProvisionedThroughputExceededException){
+                UpdateTableRequest updateTableRequest = new UpdateTableRequest()
+                        .withTableName(TABLE_NAME)
+                        .withProvisionedThroughput(new ProvisionedThroughput().
+                                withReadCapacityUnits((long) 6).
+                                withWriteCapacityUnits((long) 6));
+
+                dynamoDB.updateTable(updateTableRequest);
+            }
             e.printStackTrace();
         }
 
-        BigInteger[] array = new BigInteger[numbersFactorized.size()];
+        BigDecimal[] array = new BigDecimal[numbersFactorized.size()];
         array = numbersFactorized.toArray(array);
 
-        BigInteger estimatedCost = calculateEstimatedCost(array, estimate, costs);
-        BigInteger estimatedReqTime = calculateEstimatedCost(array, estimate, reqTimes);
+        BigDecimal estimatedCost = calculateEstimatedCost(array, estimate, costs);
+        BigDecimal estimatedReqTime = calculateEstimatedCost(array, estimate, reqTimes);
 
-        return  new BigInteger[]{
+        return  new BigDecimal[]{
                 estimatedCost,
                 estimatedReqTime
         };
-//        return calculateEstimatedCost(array, estimate);
     }
 
-    public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val, HashMap<BigInteger, BigInteger> factorizedMetric){
+    public static BigDecimal calculateEstimatedCost(BigDecimal[] array, BigDecimal val, HashMap<BigDecimal, BigDecimal> factorizedMetric){
 
         // Find nearest number factored key interval
-        NavigableSet<BigInteger> values = new TreeSet<BigInteger>();
-        for (BigInteger x : array) { values.add(x); }
-        BigInteger l = values.floor(val);
-        BigInteger h = values.ceiling(val);
+        NavigableSet<BigDecimal> values = new TreeSet<BigDecimal>();
+        for (BigDecimal x : array) { values.add(x); }
+        BigDecimal l = values.floor(val);
+        BigDecimal h = values.ceiling(val);
         //return new int[]{lower, higher};
-        BigDecimal value = new BigDecimal(val);
+        BigDecimal value = val;
 
         BigDecimal finalCost = new BigDecimal(0);
         BigDecimal finalCostRounded = new BigDecimal(0);
 
         try{
-            if(h == null || l == null) {
+            if(h == null && l == null){
+                finalCostRounded = new BigDecimal("0");
+            }else{
+                if(h == null || l == null) {
 
-                if(h == null) {
-                    finalCost = (value.multiply(new BigDecimal(factorizedMetric.get(l))).divide(new BigDecimal(l), DECIMAL_PlACES, RoundingMode.CEILING));
+                    if(h == null) {
+                        finalCost = (value.multiply(factorizedMetric.get(l)).divide(l, DECIMAL_PlACES, RoundingMode.CEILING));
+                    } else {
+                        finalCost = (value.multiply(factorizedMetric.get(h)).divide(h, DECIMAL_PlACES, RoundingMode.CEILING));
+                    }
                 } else {
-                    finalCost = (value.multiply(new BigDecimal(factorizedMetric.get(h))).divide(new BigDecimal(h), DECIMAL_PlACES, RoundingMode.CEILING));
+
+                    BigDecimal lower = l;
+                    BigDecimal higher = h;
+
+                    // Proportions
+                    BigDecimal lowerProportion = BigDecimal.ONE.subtract((value.subtract(lower)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
+                    BigDecimal higherProportion = BigDecimal.ONE.subtract((higher.subtract(value)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
+                    finalCost = (lowerProportion.multiply(factorizedMetric.get(lower)).add(higherProportion.multiply(costs.get(higher))));
                 }
-            } else {
 
-                BigDecimal lower = new BigDecimal(l);
-                BigDecimal higher = new BigDecimal(h);
-
-                // Proportions
-                BigDecimal lowerProportion = BigDecimal.ONE.subtract((value.subtract(lower)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
-                BigDecimal higherProportion = BigDecimal.ONE.subtract((higher.subtract(value)).divide(higher.subtract(lower), DECIMAL_PlACES, RoundingMode.CEILING));
-                finalCost = (lowerProportion.multiply(new BigDecimal(factorizedMetric.get(lower.toBigInteger()))).add(higherProportion.multiply(new BigDecimal(costs.get(higher.toBigInteger())))));
+                finalCostRounded = finalCost.setScale(0, BigDecimal.ROUND_HALF_UP);
             }
-
-            finalCostRounded = finalCost.setScale(0, BigDecimal.ROUND_HALF_UP);
         }catch (Exception e){
             e.printStackTrace();
         }
 
-        return finalCostRounded.toBigInteger();
-    }
-
-    static float getInstanceCPU(String instanceId){
-        double dpWAverage=0;
-        float overallCPUAverage=0;
-        long offsetInMilliseconds = 1000 * 10;
-        Dimension instanceDimension = new Dimension();
-        instanceDimension.setName("InstanceId");
-        String id = instanceId;
-
-        instanceDimension.setValue(id);
-        GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
-                .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
-                .withNamespace("AWS/EC2")
-                .withPeriod(60)
-                .withMetricName("CPUUtilization")
-                .withStatistics("Average")
-                .withDimensions(instanceDimension)
-                .withEndTime(new Date());
-        GetMetricStatisticsResult getMetricStatisticsResult =
-                EC2LBGeneralOperations.cloudWatch.getMetricStatistics(request);
-        List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
-
-        int datapointCount=0;
-        for (Datapoint dp : datapoints) {
-            datapointCount++;
-            dpWAverage += 1/datapointCount * dp.getAverage();
-        }
-
-        System.out.println(" CPU utilization for instance " + id + " = " + dpWAverage);
-        overallCPUAverage += dpWAverage;
-
-        return overallCPUAverage;
+        return finalCostRounded;
     }
 }
     
