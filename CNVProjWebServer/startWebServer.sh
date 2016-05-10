@@ -7,10 +7,12 @@ export CLASSPATH=./WebServerCode/instrumented/instrumentedOutput:./awsJavaSDK/li
 
 javac *.java
 
-javac  -source 1.4 ./WebServerCode/instrumented/*.java -d ./WebServerCode/instrumented/output/
+javac  -source 1.4 ./WebServerCode/instrumented/*.java -d ./WebServerCode/instrumented/instrumentedOutput/
+#javac  ./WebServerCode/instrumented/*.java -d ./WebServerCode/instrumented/output/
 
 javac  -source 1.4 ./InstrumentationTool/FactInstr.java -d  ./WebServerCode/instrumented/instrumentedOutput/
-#javac -source 1.4 ./WebServerCode/instrumented/WebServer.java ./WebServerCode/instrumented/FactorizeMain.java ./WebServerCode/instrumented/Factorize.java -d ./WebServerCode/instrumented/output/
+#javac  ./InstrumentationTool/FactInstr.java -d  ./WebServerCode/instrumented/instrumentedOutput/
+javac -source 1.4 ./WebServerCode/instrumented/WebServer.java ./WebServerCode/instrumented/FactorizeMain.java ./WebServerCode/instrumented/Factorize.java -d ./WebServerCode/instrumented/output/
 
 
 cd WebServerCode/instrumented/instrumentedOutput/
