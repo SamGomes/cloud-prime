@@ -131,7 +131,6 @@ public class EC2LBGeneralOperations {
         Instance newInstanceId = runInstancesResult.getReservation().getInstances()
                 .get(0);
 
-        runningInstances++;
         return newInstanceId;
     }
     
@@ -142,7 +141,6 @@ public class EC2LBGeneralOperations {
          TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
          termInstanceReq.withInstanceIds(instanceId);
          ec2.terminateInstances(termInstanceReq);
-         runningInstances--;
     }
 
     public static ArrayList<Instance> getInstances(){
@@ -159,7 +157,7 @@ public class EC2LBGeneralOperations {
         }, TIME_TO_REFRESH_INSTANCES, TIME_TO_REFRESH_INSTANCES);
     }
 
-    static int getRunningInstances(){
+    static synchronized int getRunningInstances(){
          return runningInstances;
      }
 

@@ -13,6 +13,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -22,7 +23,6 @@ public class WebServer{
 
 	private static String myIP;
     private static final String MSS_CENTRAL_TABLE = "MSSCentralTable";
-    private static final String CENTRAL_TABLE_TIME_ATTRIBUTE = "timeToFactorize";
     private static final String CENTRAL_TABLE_COST_ATTRIBUTE = "cost";
     public static final long NANO_TO_MILI = 1000000;
 
@@ -32,7 +32,7 @@ public class WebServer{
 		DynamoDBWebServerGeneralOperations.init();
 		myIP = InetAddress.getLocalHost().getHostAddress();
 		DynamoDBWebServerGeneralOperations.createTable(MSS_CENTRAL_TABLE, "numberToBeFactored",
-                new String[] {CENTRAL_TABLE_COST_ATTRIBUTE, CENTRAL_TABLE_TIME_ATTRIBUTE});
+                new String[] {CENTRAL_TABLE_COST_ATTRIBUTE});
 
         //instanceId = getInstanceId();
 	    server = HttpServer.create(new InetSocketAddress(8000), 1000);
@@ -48,12 +48,10 @@ public class WebServer{
 
 class MyHandler implements HttpHandler {
 
-	private static String myIP;
 	private static final String MSS_CENTRAL_TABLE = "MSSCentralTable";
-	private static final String CENTRAL_TABLE_TIME_ATTRIBUTE = "timeToFactorize";
 	private static final String CENTRAL_TABLE_COST_ATTRIBUTE = "cost";
-	private static ArrayList knownNumbers = new ArrayList();
-	private static int requestNum = 0;
+	private static ConcurrentLinkedQueue knownNumbers = new ConcurrentLinkedQueue();
+	private static int CACHESIZE = 100;
 
 
 	public void handle(final HttpExchange exchange) throws IOException {
@@ -70,7 +68,7 @@ class MyHandler implements HttpHandler {
 			long endTime = System.nanoTime();
 			String response = saveStats("factorization result: ",numberToBeFactored,
 					Thread.currentThread().getId(), pro.getInputStream(),
-					(endTime-startTime)/WebServer.NANO_TO_MILI, 4);
+					(endTime-startTime)/WebServer.NANO_TO_MILI);
 			System.out.print(response+"\n");
 
 
@@ -90,7 +88,7 @@ class MyHandler implements HttpHandler {
 
 
 	public String saveStats(String name,BigInteger numberToBeFactored,
-								   long id, InputStream ins, long timeToFactor, float previousCPU) throws Exception {
+								   long id, InputStream ins, long timeToFactor) throws Exception {
 		String line;
 		String result;
 
@@ -103,24 +101,35 @@ class MyHandler implements HttpHandler {
 		Date date = new Date();
 		String formatedDate = dateFormat.format(date);
 
+		//get first line (instrumentation output - cost)
 		line = in.readLine();
-		// while(line != null){
-		// 	line += in.readLine();
-		// }
 
-		if (previousCPU <= 5){
-			try {
-				if(!knownNumbers.contains(numberToBeFactored)) {
+		try{
+
+			synchronized(this) {
+
+				System.out.println("knownNumbers: " + knownNumbers.toString());
+				if (knownNumbers.size() > CACHESIZE) {
+					knownNumbers.remove(knownNumbers.iterator().next());
+				}
+
+
+				if (!knownNumbers.contains(numberToBeFactored)) {
 					knownNumbers.add(numberToBeFactored);
 					DynamoDBWebServerGeneralOperations.insertTuple(MSS_CENTRAL_TABLE,
 							new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored),
-									CENTRAL_TABLE_COST_ATTRIBUTE, line, CENTRAL_TABLE_TIME_ATTRIBUTE, String.valueOf(timeToFactor)});
+									CENTRAL_TABLE_COST_ATTRIBUTE, line});
+				} else {
+					knownNumbers.remove(numberToBeFactored);
+					knownNumbers.add(numberToBeFactored);
 				}
-
-			}catch(Exception e){
-				e.printStackTrace();
 			}
+
+
+		}catch(Exception e){
+			e.printStackTrace();
 		}
+
 		return result;
 	}
 

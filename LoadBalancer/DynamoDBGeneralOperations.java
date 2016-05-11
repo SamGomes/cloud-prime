@@ -73,6 +73,10 @@ public class DynamoDBGeneralOperations {
     private static final String COST_ATTRIBUTE = "cost";
     private static final String INSTANCE_PRIMARY_KEY = "instanceId";
     private static int DECIMAL_PlACES = 6;
+    private static LinkedHashMap<BigInteger,BigInteger> knownNumbers = new LinkedHashMap<>();
+    private static int CACHESIZE = 100;
+
+
 
     // numberToFactorized : cost
     static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
@@ -113,7 +117,7 @@ public class DynamoDBGeneralOperations {
         return items;
     }
 
-    static void insertTuple(String tableName,String[] attrAndValues) throws Exception {
+    static synchronized void insertTuple(String tableName,String[] attrAndValues) throws Exception {
 
 
         System.out.println("insertTuple! tableName: "+tableName+", attrAndValues: ");
@@ -136,7 +140,7 @@ public class DynamoDBGeneralOperations {
         System.out.println("Insertion result: " + putItemResult);
     }
 
-    static Map<String,AttributeValue> getInstanceTuple(String tableName,String instance) throws Exception {
+    static synchronized Map<String,AttributeValue> getInstanceTuple(String tableName,String instance) throws Exception {
 
         Map<String, AttributeValue> instanceLoadTuple = null;
 
@@ -160,7 +164,20 @@ public class DynamoDBGeneralOperations {
     }
 
 
-    static BigInteger estimateCostScan(BigInteger estimate){
+    static synchronized BigInteger estimateCostScan(BigInteger estimate){
+
+
+        if(knownNumbers.containsKey(estimate)){
+            System.out.println("i know this numbers estimate! cache: "+knownNumbers.toString());
+            BigInteger knownEstimate = knownNumbers.get(estimate);
+            knownNumbers.remove(estimate);
+            knownNumbers.put(estimate,knownEstimate);
+            if(knownNumbers.size()>CACHESIZE) {
+                knownNumbers.remove(knownNumbers.keySet().iterator().next());
+            }
+            return knownEstimate;
+        }
+
 
         ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
 
@@ -182,10 +199,10 @@ public class DynamoDBGeneralOperations {
 
             QueryResult result = dynamoDB.query(queryRequest);
             if (result.getCount() > 0){
-                for (Map<String,AttributeValue> item: result.getItems()){
-                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
-                    return numberCostTuple;
-                }
+                numberCostTuple = new BigInteger(result.getItems().get(0).get(COST_ATTRIBUTE).getS());
+                knownNumbers.put(estimate,numberCostTuple);
+                return numberCostTuple;
+
             }
 
             /*

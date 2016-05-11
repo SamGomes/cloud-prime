@@ -27,6 +27,8 @@ import java.util.concurrent.*;
 
 public class EC2LoadBalancer {
 
+    //--------LOAD BALANCING MODULE CONTROL VARIABLES-----------------------------------
+
     private static ConcurrentHashMap<String,Instance> runningInstances;
     private static int TIME_TO_REFRESH_INSTANCES = 20000;
     private static Timer timer = new Timer();
@@ -39,9 +41,16 @@ public class EC2LoadBalancer {
     private static ConcurrentHashMap<String, IMetric> machineCurrentMetric = new ConcurrentHashMap<>();
 
 
+    //--------AUTO SCALLING MODULE CONTROL VARIABLES-----------------------------------
+
     private static int STARTINSTANCES = 1;
     private static int MINMACHINENUM = 1;
-    private static int MAXMACHINENUM = 2;
+    private static int MAXMACHINENUM = 3;
+
+    private static int MINIMUM_CPU_UTIL=20;
+    private static int MAXIMUM_CPU_UTIL=50;
+
+
 
     public static void main(String[] args) throws Exception {
 
@@ -105,7 +114,7 @@ public class EC2LoadBalancer {
                     BigInteger cost = new BigInteger(bestMachine[1]);
 
                     if (instance == null){
-                        System.out.println("Could not find any instance to serve the request");
+                        System.out.println("Could not find any instance to serve the request! Something went wrong!");
                     }else{
                         try{
                             System.out.println(instance.getPublicIpAddress());
@@ -135,18 +144,19 @@ public class EC2LoadBalancer {
 
                             // update (subtract) current metric
                             updateInstanceMetric(instance, cost, false);
-
-                            exchange.sendResponseHeaders(200, result.length());
-                            OutputStream os = exchange.getResponseBody();
-                            os.write(result.toString().getBytes());
-                            os.close();
-                        }catch(IOException e){
-                            try {
-                                updateInstanceMetric(instance, cost, false);
-                            }catch(InterruptedException ei){
-                                ei.printStackTrace();
+                            try{
+                                exchange.sendResponseHeaders(200, result.length());
+                                OutputStream os = exchange.getResponseBody();
+                                os.write(result.toString().getBytes());
+                                os.close();
+                            }catch(IOException e){
+//                                try {
+//                                    updateInstanceMetric(instance, cost, false);
+//                                }catch(InterruptedException ei){
+//                                    ei.printStackTrace();
+//                                }
+                                e.printStackTrace();
                             }
-                            e.printStackTrace();
                         }catch(Exception e2){
                             e2.printStackTrace();
                         }
@@ -186,7 +196,7 @@ public class EC2LoadBalancer {
      * @param numberToFactorize
      * @return instance and estimated cost for the number to be factored
      */
-    public static String[] getBestMachineIp(BigInteger numberToFactorize) {
+    public synchronized static String[] getBestMachineIp(BigInteger numberToFactorize) {
 
 
         // [ instanceId, cost ]
@@ -203,8 +213,9 @@ public class EC2LoadBalancer {
         BigInteger tempCost = null;
         Instance bestInstance = null;
 
-        // if there arent machines running just start one!
-        int instSize = EC2LBGeneralOperations.getActiveInstances();
+        // if there arent machines running!
+        int instSize = EC2LBGeneralOperations.getRunningInstances();
+        System.out.println("instSize: "+instSize);
         if(instSize>0){
 
             bestInstance = runningInstances.entrySet().iterator().next().getValue();
@@ -227,13 +238,10 @@ public class EC2LoadBalancer {
                 }
             }
 
-//            System.out.println("instSize: "+instSize);
-//            if(instSize>=MAX_NUM_INSTANCES){
-//
+
             results[0] = bestInstance.getInstanceId();
             results[1] = estimatedCost.toString();
             return results;
-//            }
 
         }
 
@@ -241,6 +249,13 @@ public class EC2LoadBalancer {
         return null;
     }
 
+    /**
+     * Autoscalling modules dominant method
+     *
+     * It is based on the average of the latest cpu measures
+     * from cloutprime
+     *
+     */
     public static void scaleInstances(){
 
         try {
@@ -293,12 +308,12 @@ public class EC2LoadBalancer {
             overallCPUAverage /=EC2LBGeneralOperations.getActiveInstances();
 
             System.out.println("overall: "+overallCPUAverage+"get: "+EC2LBGeneralOperations.getActiveInstances()+"MAX: "+MAXMACHINENUM);
-            if (overallCPUAverage > 60 && EC2LBGeneralOperations.getActiveInstances() < MAXMACHINENUM) {
+            if (overallCPUAverage > MAXIMUM_CPU_UTIL && EC2LBGeneralOperations.getActiveInstances() < MAXMACHINENUM) {
                 System.out.println(" [INFO] Start an instance! ");
                 EC2LBGeneralOperations.startInstance(AMI_ID);
             }
 
-            if (overallCPUAverage < 30 && EC2LBGeneralOperations.getRunningInstances() > MINMACHINENUM) {
+            if (overallCPUAverage < MINIMUM_CPU_UTIL && EC2LBGeneralOperations.getRunningInstances() > MINMACHINENUM) {
                 System.out.println(" [INFO] Fuck an instance! " + lowConsumptionMachineId);
                 EC2LBGeneralOperations.terminateInstance(lowConsumptionMachineId);
             }
