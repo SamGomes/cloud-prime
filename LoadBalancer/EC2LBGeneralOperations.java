@@ -33,6 +33,7 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public class EC2LBGeneralOperations {
 
@@ -57,6 +58,7 @@ public class EC2LBGeneralOperations {
     private static int activeInstances = 0;
     private static int MIN_INSTANCES = 1;
     private static int MAX_INSTANCES = 5;
+    private static int MAX_START_NEW_INSTANCES = 1;
     private static int NUMBER_INSTANCES_CPU_ABOVE_60 = 0;
     private static ArrayList<Instance> instances;
     private static ConcurrentHashMap<String,Instance> runningInstancesArray;
@@ -65,9 +67,10 @@ public class EC2LBGeneralOperations {
     private static Timer timer = new Timer();
     private static DescribeInstancesResult describeInstancesRequest;
     private static List<Reservation> reservations;
-    private static int TIME_TO_REFRESH_INSTANCES = 30000;
+    private static int TIME_TO_REFRESH_INSTANCES = 10000;
+    private static int MIN_TO_CHECK_IF_IDLE = 2;
     private static boolean isLaunchingInstance = false;
-    private static final String AMI_ID = "ami-83f206e3";
+    private static final String AMI_ID = "ami-7f74891f";
       
     /**
      * The only information needed to create a client are security credentials
@@ -127,7 +130,7 @@ public class EC2LBGeneralOperations {
                 .withInstanceType("t2.micro")
                 .withMinCount(1)
                 .withMaxCount(1)
-                .withKeyName("CNV-lab-AWS")
+                .withKeyName("CNV-Final")
                 .withSecurityGroups("CNV-ssh+http")
                 .withMonitoring(true);
 
@@ -138,7 +141,6 @@ public class EC2LBGeneralOperations {
 
         tryNewInstance(newInstanceId.getPublicIpAddress());
 
-        runningInstances++;
         return newInstanceId;
     }
     
@@ -176,6 +178,9 @@ public class EC2LBGeneralOperations {
         instances.clear();
         runningInstances = 0;
         activeInstances = 0;
+        long currentDate = TimeUnit.MILLISECONDS.toMinutes(new Date().getTime());
+
+        System.out.println("Starting instances: "+ instancesBeingStartedArray.size());
 
         for (Reservation reservation : reservations) {
             instances.addAll(reservation.getInstances());
@@ -197,7 +202,7 @@ public class EC2LBGeneralOperations {
                 if(!instancesBeingStartedArray.contains(instance.getInstanceId())){
                     if (state.equals("running") && tryNewInstance(instance.getPublicIpAddress())){
                         runningInstances++;
-                        runningInstancesArray.put(instance.getInstanceId(),instance);
+                        runningInstancesArray.put(instance.getInstanceId(), instance);
                     }
                     if (!state.equals("terminated")){
                         activeInstances++;
@@ -206,6 +211,8 @@ public class EC2LBGeneralOperations {
                     if (tryNewInstance(instance.getPublicIpAddress())){
                         isLaunchingInstance = false;
                         instancesBeingStartedArray.remove(instance.getInstanceId());
+                        runningInstances++;
+                        runningInstancesArray.put(instance.getInstanceId(),instance);
                     }
                 }
             }else{
@@ -214,13 +221,17 @@ public class EC2LBGeneralOperations {
         }
         // Check if any instance can be terminated or if the load of the instances is high
         for (String instance: runningInstancesArray.keySet()){
-            if (getInstanceCPU(instance) < 30 && runningInstancesArray.size() > MIN_INSTANCES){
-                try {
-                    terminateInstance(instance,null);
-                    runningInstancesArray.remove(instance);
-                } catch (Exception e) {
-                    System.out.println("Unable to stop instance");
-                    e.printStackTrace();
+            long instanceTime = TimeUnit.MILLISECONDS.toMinutes(
+                    runningInstancesArray.get(instance).getLaunchTime().getTime());
+            if (currentDate-instanceTime > MIN_TO_CHECK_IF_IDLE){
+                if (getInstanceCPU(instance) < 30 && runningInstancesArray.size() > MIN_INSTANCES){
+                    try {
+                        terminateInstance(instance,null);
+                        runningInstancesArray.remove(instance);
+                    } catch (Exception e) {
+                        System.out.println("Unable to stop instance");
+                        e.printStackTrace();
+                    }
                 }
             }
             if (getInstanceCPU(instance) > 60
@@ -230,14 +241,16 @@ public class EC2LBGeneralOperations {
             }
         }
         // If all instances have their CPU load above 60%, launch a new one
-        if (NUMBER_INSTANCES_CPU_ABOVE_60 == runningInstancesArray.size() && !isLaunchingInstance){
-            try {
-                isLaunchingInstance = true;
-                NUMBER_INSTANCES_CPU_ABOVE_60 = 0;
-                Instance newInstance = startInstance(null,null,null,null,AMI_ID);
-                instancesBeingStartedArray.add(newInstance.getInstanceId());
-            } catch (Exception e) {
-                System.out.println("Unable to start instance");
+        if (instancesBeingStartedArray.size() < MAX_START_NEW_INSTANCES){
+            if (NUMBER_INSTANCES_CPU_ABOVE_60 == runningInstancesArray.size() && !isLaunchingInstance){
+                try {
+                    isLaunchingInstance = true;
+                    NUMBER_INSTANCES_CPU_ABOVE_60 = 0;
+                    Instance newInstance = startInstance(null,null,null,null,AMI_ID);
+                    instancesBeingStartedArray.add(newInstance.getInstanceId());
+                } catch (Exception e) {
+                    System.out.println("Unable to start instance");
+                }
             }
         }
     }

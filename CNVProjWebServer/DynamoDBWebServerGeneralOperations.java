@@ -24,7 +24,6 @@ import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.dynamodbv2.util.Tables;
 
-import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -60,11 +59,6 @@ public class DynamoDBWebServerGeneralOperations {
      */
 
     static AmazonDynamoDBClient dynamoDB;
-    private static final String TABLE_NAME = "MSSCentralTable";
-    private static final String PRIMARY_KEY = "numberToBeFactored";
-    private static final String COST_ATTRIBUTE = "cost";
-    private static final String INSTACE_LOAD_TABLE_NAME = "MSS Instance Load";
-    private static final String INSTANCE_PRIMARY_KEY = "instanceId";
 
     static void init() throws Exception {
 
@@ -87,11 +81,6 @@ public class DynamoDBWebServerGeneralOperations {
 
         System.out.print("createTable! tableName: "+tableName+"  ,keyAttr: "+keyAttr+" attributes: ");
 
-        for(int i=0;i<attributes.length;i++){
-            System.out.print(" "+attributes[i]+" ,");
-        }
-        System.out.print("\n");
-
         // Create table if it does not exist yet
 
         if (Tables.doesTableExist(dynamoDB, tableName)) {
@@ -101,7 +90,7 @@ public class DynamoDBWebServerGeneralOperations {
             CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
                 .withKeySchema(new KeySchemaElement[]{new KeySchemaElement().withAttributeName(keyAttr).withKeyType(KeyType.HASH)})
                 .withAttributeDefinitions(new AttributeDefinition[]{new AttributeDefinition().withAttributeName(keyAttr).withAttributeType(ScalarAttributeType.S)})
-                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(new Long(3)).withWriteCapacityUnits(new Long(3)));
+                .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(new Long(6)).withWriteCapacityUnits(new Long(6)));
                 TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest).getTableDescription();
             System.out.println("Created Table: " + createdTableDescription);
 
@@ -112,32 +101,8 @@ public class DynamoDBWebServerGeneralOperations {
         }
         
     }
-
-    static void describeTable(String tableName) throws Exception {
-
-        System.out.println("describeTable tableName"+tableName);
-        
-        // DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(tableName);
-        // TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
-        // System.out.println("Table Description: " + tableDescription);        
-    }
-
-    static void queryTable(String tableName,String attribute,Condition condition) throws Exception {
-    
-        System.out.println("createTable! tableName: "+tableName+"  ,condition: "+condition+" attribute: "+attribute);
-
-         HashMap scanFilter = new HashMap();
-
-         scanFilter.put(attribute, condition);
-         ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
-         ScanResult scanResult = dynamoDB.scan(scanRequest);
-         System.out.println("Result: " + scanResult);
-    }
     
     static void insertTuple(String tableName,String[] attrAndValues) throws Exception {
-
-
-        System.out.println("insertTuple! tableName: "+tableName+", attrAndValues: ");
 
         for(int i=0;i<attrAndValues.length;i++){
             System.out.print(" "+attrAndValues[i]+" ,");
@@ -154,74 +119,6 @@ public class DynamoDBWebServerGeneralOperations {
 
         PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
         PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
-        System.out.println("Insertion result: " + putItemResult);
-    }
-
-    static Map<String,AttributeValue> getInstanceTuple(String tableName,String instance) throws Exception {
-
-        Map<String, AttributeValue> instanceLoadTuple = null;
-
-        Condition hashKeyCondition = new Condition()
-                .withComparisonOperator(ComparisonOperator.EQ.toString())
-                .withAttributeValueList(new AttributeValue().withS(instance));
-
-        Map<String, Condition> keyConditions = new HashMap<>();
-        keyConditions.put(INSTANCE_PRIMARY_KEY, hashKeyCondition);
-        //keyConditions.put("cost", rangeKeyCondition);
-
-        QueryRequest queryRequest = new QueryRequest()
-                .withTableName(TABLE_NAME)
-                .withKeyConditions(keyConditions)
-                .withLimit(1);
-
-        QueryResult result = dynamoDB.query(queryRequest);
-        if (result.getCount() > 0){
-            instanceLoadTuple = result.getItems().get(0);
-        }
-        return instanceLoadTuple;
-    }
-
-    static int estimateCost(BigInteger estimate){
-
-        Map<String, AttributeValue> expressionAttributeValues =
-                new HashMap<>();
-        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
-
-        Map<String, AttributeValue> expressionHigherAttributeValues =
-                new HashMap<>();
-        expressionAttributeValues.put(":val", new AttributeValue().withN(String.valueOf(estimate)));
-
-        QueryRequest queryRequest = new QueryRequest()
-                .withFilterExpression(PRIMARY_KEY+" < :val")
-                .withScanIndexForward(false)
-                .withExpressionAttributeValues(expressionAttributeValues)
-                .withConsistentRead(true)
-                .withLimit(10);
-
-        QueryResult result = dynamoDB.query(queryRequest);
-
-        QueryRequest queryHigherRequest = new QueryRequest()
-                .withFilterExpression(PRIMARY_KEY+" > :val")
-                .withScanIndexForward(false)
-                .withExpressionAttributeValues(expressionHigherAttributeValues)
-                .withConsistentRead(true)
-                .withLimit(10);
-
-        QueryResult higherResult = dynamoDB.query(queryHigherRequest);
-
-        for (Map<String, AttributeValue> item : result.getItems()) {
-            for (String key: item.keySet()){
-                System.out.println(key);
-            }
-        }
-
-        for (Map<String, AttributeValue> item : higherResult.getItems()) {
-            for (String key: item.keySet()){
-                System.out.println(key);
-            }
-        }
-
-        return 0;
     }
 }
     

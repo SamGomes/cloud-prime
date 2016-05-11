@@ -23,14 +23,9 @@ import java.util.concurrent.*;
 public class EC2LoadBalancer {
 
     private static ConcurrentHashMap<String,Instance> runningInstances;
-    private static int TIME_TO_REFRESH_INSTANCES = 5000;
     private static Timer timer = new Timer();
     private static String LoadBalancerIp;
-    private static boolean isLaunchingNewInstance = false;
-    private static final Object lock = new Object();
-
     private static BigDecimal THRESHOLD = new BigDecimal("250458758"); //Cost of 53111239897403731
-    private static final String AMI_ID = "ami-83f206e3";
 
     private static ConcurrentHashMap<String, IMetric> machineCurrentMetric = new ConcurrentHashMap<>();
 
@@ -38,7 +33,6 @@ public class EC2LoadBalancer {
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         LoadBalancerIp = InetAddress.getLocalHost().getHostAddress();
         server.createContext("/f.html", new MyHandler());
-        //server.setExecutor(null); // creates a default executor
         server.setExecutor(new ThreadPoolExecutor(5, 20, 1200, TimeUnit.SECONDS, new ArrayBlockingQueue(100))); // creates a default executor
         createInstanceList();
         server.start();
@@ -58,7 +52,7 @@ public class EC2LoadBalancer {
     }
 
     public static HashMap queryToMap(String query){
-        HashMap result = new HashMap();
+        HashMap<String,String> result = new HashMap<>();
         String[] params = query.split("&");
         for (int i=0; i< params.length;i++) {
             String pair[] = params[i].split("=");
@@ -85,7 +79,7 @@ public class EC2LoadBalancer {
                     String[] bestMachine = getBestMachineIp(numberToBeFactored);
                     while(bestMachine[0] == null){
                         try {
-                            TimeUnit.SECONDS.sleep(3);
+                            TimeUnit.SECONDS.sleep(1);
                         } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
@@ -135,6 +129,7 @@ public class EC2LoadBalancer {
     }
 
     public static void startTimer(){
+        int TIME_TO_REFRESH_INSTANCES = 10000;
         timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
@@ -149,35 +144,6 @@ public class EC2LoadBalancer {
     }
 
     /**
-     * If there's N machines are being unused it terminates N-1 instances
-     *
-     * @throws Exception
-     */
-    public static void deleteUnusedInstances() throws Exception{
-        Instance currentInstance;
-
-        // Check if any machine is not being used and terminate if its not needed
-        for (Map.Entry<String,Instance> entry: runningInstances.entrySet()){
-            currentInstance = entry.getValue();
-
-            IMetric metric = machineCurrentMetric.get(currentInstance.getInstanceId());
-
-            System.out.println("metrics: " + (metric != null ? metric.getReqList().toString() : "null"));
-            ConcurrentLinkedQueue<RequestTiming> reqList;
-            // the table is populated with at least one request ????
-            if(metric != null){
-                reqList =  metric.getReqList();
-                if (reqList.isEmpty()){
-
-                    System.out.println("Terminating instance " + currentInstance.getInstanceId());
-                    EC2LBGeneralOperations.terminateInstance(currentInstance.getInstanceId(), null);
-
-                }
-            }
-        }
-    }
-
-    /**
      * Get the best machine to process a request according to its current cost and estimated cost
      * for the number to factorize
      *
@@ -188,7 +154,7 @@ public class EC2LoadBalancer {
      * new request.
      *
      *
-     * @param numberToFactorize
+     * @param numberToFactorize - Requested number to factorize
      * @return instance and estimated cost for the number to be factored
      */
     public static String[] getBestMachineIp(BigDecimal numberToFactorize){
@@ -206,7 +172,7 @@ public class EC2LoadBalancer {
 
         //if there arent machines running just start one!
         int instSize = EC2LBGeneralOperations.getActiveInstances();
-        IMetric metric = null;
+        IMetric metric;
         long willSupportRequestIn = 0;
 
         if(instSize > 0){
@@ -219,7 +185,18 @@ public class EC2LoadBalancer {
                 bestInstance = entry.getValue();
 
                 // The current instance can process the request
-                if(metric.getCost().add(estimatedCost).compareTo(THRESHOLD) == -1){
+
+                /**
+                 *
+                 *  INSTEAD
+                 *  Check if current cost of the machine is higher than the threshold
+                 *  If it is, don't forward the requests
+                 *  If it is not, forward the request
+                 *  This way, the instances can have a similar work load
+                 *
+                 */
+                if(metric.getCost().compareTo(THRESHOLD) == -1){
+                //if(metric.getCost().add(estimatedCost).compareTo(THRESHOLD) == -1){
                     results[0] = entry.getKey();
                     results[1] = estimatedCost.toString();
                     results[2] = estimatedTime.toString();
@@ -230,7 +207,7 @@ public class EC2LoadBalancer {
                     if (willSupportRequestIn > timeToWaitForInstance){
                         willSupportRequestIn = timeToWaitForInstance;
                     }
-                    THRESHOLD = estimatedCost.add(new BigDecimal("1"));
+                    //THRESHOLD = estimatedCost.add(new BigDecimal("1"));
                 }
             }
             // One of instances will be able to support the request in the near future
@@ -251,105 +228,10 @@ public class EC2LoadBalancer {
                 results[2] = estimatedTime.toString();
                 return results;
             }else{
-                if (estimatedCost.compareTo(THRESHOLD) == -1){
+                /*if (estimatedCost.compareTo(THRESHOLD) == -1){
                     THRESHOLD = estimatedCost.add(new BigDecimal("1"));
-                }
+                }*/
                 return results;
-            }
-        }/*else{
-            Instance instance = null;
-            if (!isLaunchingNewInstance){
-                try {
-                    isLaunchingNewInstance = true;
-                    // launch new instance
-                    Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
-                    machineCurrentMetric.put(newInstance.getInstanceId(),new IMetric());
-                    while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
-                        TimeUnit.SECONDS.sleep(5);
-                    }
-                    System.out.println("returning new instance");
-                    instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
-                    //tryNewInstance(instance.getPublicIpAddress());
-                    IMetric iMetric = new IMetric();
-                    machineCurrentMetric.put(instance.getInstanceId(),iMetric);
-                    isLaunchingNewInstance = false;
-
-                    results[0] = instance.getInstanceId();
-                    results[1] = estimatedCost.toString();
-                    results[2] = estimatedTime.toString();
-                    return results;
-
-                } catch (Exception e) {
-                    System.out.println("Instance still unreachable");
-                }
-            }else{
-                // Since an instance is being launched
-                // wait for it to launch and forward the requests there
-                while(isLaunchingNewInstance){
-                    try {
-                        TimeUnit.SECONDS.sleep(5);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-                if (instance != null){
-                    results[0] = instance.getInstanceId();
-                    results[1] = estimatedCost.toString();
-                    results[2] = estimatedTime.toString();
-                    return results;
-                }
-            }
-        } */
-        return results;
-    }
-
-    public static String[] launchNewInstance(BigDecimal estimatedCost, BigDecimal estimatedTime){
-
-        String[] results = new String[3];
-        synchronized (lock){
-            Instance instance = null;
-            if (!isLaunchingNewInstance){
-                try {
-                    isLaunchingNewInstance = true;
-                    // launch new instance
-                    Instance newInstance = EC2LBGeneralOperations.startInstance(null,null,null,"WebServer", AMI_ID);
-                    machineCurrentMetric.put(newInstance.getInstanceId(),new IMetric());
-                    while (!EC2LBGeneralOperations.getInstanceStatus(newInstance.getInstanceId()).equals("running")){
-                        TimeUnit.SECONDS.sleep(5);
-                    }
-                    instance = EC2LBGeneralOperations.getInstanceById(newInstance.getInstanceId());
-                    tryNewInstance(instance.getPublicIpAddress());
-                    isLaunchingNewInstance = false;
-
-                    results[0] = instance.getInstanceId();
-                    results[1] = estimatedCost.toString();
-                    results[2] = estimatedTime.toString();
-                    return results;
-
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }else{
-                // Since an instance is being launched
-                // wait for it to launch and forward the requests there
-           /* while(isLaunchingNewInstance){
-                try {
-                    TimeUnit.SECONDS.sleep(5);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }*/
-                try {
-                    TimeUnit.SECONDS.sleep(5);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                if (instance != null){
-                    results[0] = instance.getInstanceId();
-                    results[1] = estimatedCost.toString();
-                    results[2] = estimatedTime.toString();
-                    return results;
-                }
             }
         }
         return results;
@@ -392,31 +274,6 @@ public class EC2LoadBalancer {
         }catch (Exception e){
             e.printStackTrace();
         }
-    }
-
-    public static boolean tryNewInstance(String instancePublicAddress){
-
-        HttpClient client = HttpClientBuilder.create().build();
-        String url = "http://"+instancePublicAddress+":8000/f.html?n=2";
-        HttpGet request = new HttpGet(url);
-        HttpResponse response;
-        int statusCode = 404;
-
-        // While the response code is not 200 keep sending requests
-        // This will ensure the web server is already running when we forward the request
-        while(statusCode != 200){
-            try {
-                response = client.execute(request);
-                statusCode = response.getStatusLine().getStatusCode();
-            } catch (IOException e) {
-                try {
-                    Thread.sleep(5000);
-                } catch (InterruptedException e1) {
-                    System.out.println("Instance still unreachable");
-                }
-            }
-        }
-        return true;
     }
 }
 
