@@ -71,20 +71,12 @@ public class DynamoDBGeneralOperations {
     private static final String TABLE_NAME = "MSSCentralTable";
     private static final String PRIMARY_KEY = "numberToBeFactored";
     private static final String COST_ATTRIBUTE = "cost";
-    private static final String TIME_TO_FACTORIZE_ATTRIBUTE = "timeToFactorize";
     private static final String INSTANCE_PRIMARY_KEY = "instanceId";
-    private static final String INSTANCE_LOAD_TABLE_NAME = "MSS Instance Load";
-    private static int ESTIMATED_COST = 1;
-    private static int DIRECT_COST = 2;
     private static int DECIMAL_PlACES = 6;
 
     // numberToFactorized : cost
     static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
 
-    // numberToFactorized : estimatedTime
-    static HashMap<BigInteger, BigInteger> reqTimes = new HashMap<>();
-
-    private static Table table;
     static void init() throws Exception {
 
         System.out.println("init");
@@ -99,16 +91,6 @@ public class DynamoDBGeneralOperations {
         dynamoDB = new AmazonDynamoDBClient(credentials);
         Region usWest2 = Region.getRegion(Regions.US_WEST_2);
         dynamoDB.setRegion(usWest2);
-    }
-
-
-    static void describeTable(String tableName) throws Exception {
-
-        System.out.println("describeTable tableName"+tableName);
-
-        // DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(tableName);
-        // TableDescription tableDescription = dynamoDB.describeTable(describeTableRequest).getTable();
-        // System.out.println("Table Description: " + tableDescription);
     }
 
     static ItemCollection<QueryOutcome> queryTable(String tableName,String var, String val) throws Exception {
@@ -164,7 +146,6 @@ public class DynamoDBGeneralOperations {
 
         Map<String, Condition> keyConditions = new HashMap<>();
         keyConditions.put(INSTANCE_PRIMARY_KEY, hashKeyCondition);
-        //keyConditions.put("cost", rangeKeyCondition);
 
         QueryRequest queryRequest = new QueryRequest()
                 .withTableName(tableName)
@@ -179,14 +160,13 @@ public class DynamoDBGeneralOperations {
     }
 
 
-    static BigInteger[] estimateCostScan(BigInteger estimate){
+    static BigInteger estimateCostScan(BigInteger estimate){
 
         ArrayList<BigInteger> numbersFactorized = new ArrayList<>();
 
         try{
 
             BigInteger numberCostTuple;
-            BigInteger numberReqTimeTuple;
 
             Condition hashKeyCondition = new Condition()
                     .withComparisonOperator(ComparisonOperator.EQ.toString())
@@ -203,13 +183,8 @@ public class DynamoDBGeneralOperations {
             QueryResult result = dynamoDB.query(queryRequest);
             if (result.getCount() > 0){
                 for (Map<String,AttributeValue> item: result.getItems()){
-//                    numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
                     numberCostTuple = new BigInteger(item.get(COST_ATTRIBUTE).getS());
-                    numberReqTimeTuple = new BigInteger(item.get(TIME_TO_FACTORIZE_ATTRIBUTE).getS());
-                    return new BigInteger[]{
-                            numberCostTuple,
-                            numberReqTimeTuple
-                    };
+                    return numberCostTuple;
                 }
             }
 
@@ -246,19 +221,15 @@ public class DynamoDBGeneralOperations {
             for (Map<String, AttributeValue> item : lowerClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
                 AttributeValue cost = item.get(COST_ATTRIBUTE);
-                AttributeValue reqTime = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
                 numbersFactorized.add(new BigInteger(value.getS()));
                 costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
-                reqTimes.put(new BigInteger(value.getS()),new BigInteger(reqTime.getS()));
             }
 
             for (Map<String, AttributeValue> item : higherClosestValue.getItems()){
                 AttributeValue value = item.get(PRIMARY_KEY);
                 AttributeValue cost = item.get(COST_ATTRIBUTE);
-                AttributeValue reqTime = item.get(TIME_TO_FACTORIZE_ATTRIBUTE);
                 numbersFactorized.add(new BigInteger(value.getS()));
                 costs.put(new BigInteger(value.getS()),new BigInteger(cost.getS()));
-                reqTimes.put(new BigInteger(value.getS()),new BigInteger(reqTime.getS()));
             }
         }catch (Exception e){
             e.printStackTrace();
@@ -268,13 +239,7 @@ public class DynamoDBGeneralOperations {
         array = numbersFactorized.toArray(array);
 
         BigInteger estimatedCost = calculateEstimatedCost(array, estimate, costs);
-        BigInteger estimatedReqTime = calculateEstimatedCost(array, estimate, reqTimes);
-
-        return  new BigInteger[]{
-                estimatedCost,
-                estimatedReqTime
-        };
-//        return calculateEstimatedCost(array, estimate);
+        return estimatedCost;
     }
 
     public static BigInteger calculateEstimatedCost(BigInteger[] array, BigInteger val, HashMap<BigInteger, BigInteger> factorizedMetric){
@@ -316,38 +281,4 @@ public class DynamoDBGeneralOperations {
 
         return finalCostRounded.toBigInteger();
     }
-
-    static float getInstanceCPU(String instanceId){
-        double dpWAverage=0;
-        float overallCPUAverage=0;
-        long offsetInMilliseconds = 1000 * 10;
-        Dimension instanceDimension = new Dimension();
-        instanceDimension.setName("InstanceId");
-        String id = instanceId;
-
-        instanceDimension.setValue(id);
-        GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
-                .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
-                .withNamespace("AWS/EC2")
-                .withPeriod(60)
-                .withMetricName("CPUUtilization")
-                .withStatistics("Average")
-                .withDimensions(instanceDimension)
-                .withEndTime(new Date());
-        GetMetricStatisticsResult getMetricStatisticsResult =
-                EC2LBGeneralOperations.cloudWatch.getMetricStatistics(request);
-        List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
-
-        int datapointCount=0;
-        for (Datapoint dp : datapoints) {
-            datapointCount++;
-            dpWAverage += 1/datapointCount * dp.getAverage();
-        }
-
-        System.out.println(" CPU utilization for instance " + id + " = " + dpWAverage);
-        overallCPUAverage += dpWAverage;
-
-        return overallCPUAverage;
-    }
 }
-    

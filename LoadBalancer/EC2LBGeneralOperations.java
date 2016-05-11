@@ -108,7 +108,7 @@ public class EC2LBGeneralOperations {
         startTimer(); // Starts timer for refreshing instances
     }
 
-    static Instance startInstance( DescribeInstancesResult describeInstancesRequest,List<Reservation> reservations,ArrayList<Instance> instances,String role,String ami) throws Exception {
+    static Instance startInstance(String ami) throws Exception {
 
         System.out.println("runningInstances: " + runningInstances + ".");
 
@@ -135,7 +135,7 @@ public class EC2LBGeneralOperations {
         return newInstanceId;
     }
     
-    static void terminateInstance(String instanceId, ArrayList instances) throws Exception {
+    static void terminateInstance(String instanceId) throws Exception {
         
         System.out.println("Terminating instance.");
         
