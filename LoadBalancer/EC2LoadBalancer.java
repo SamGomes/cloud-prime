@@ -1,3 +1,4 @@
+import com.amazonaws.annotation.ThreadSafe;
 import com.amazonaws.services.ec2.model.Instance;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -28,15 +29,18 @@ import java.util.concurrent.*;
 public class EC2LoadBalancer {
 
     //--------LOAD BALANCING MODULE CONTROL VARIABLES-----------------------------------
+//
+//    private static ConcurrentHashMap<String,Instance> runningInstances;
+//    private static ConcurrentHashMap<String,Instance> activeInstances;
 
-    private static ConcurrentHashMap<String,Instance> runningInstances;
-    private static int TIME_TO_REFRESH_INSTANCES = 20000;
-    private static Timer timer = new Timer();
+    private static int TIME_TO_REFRESH_INSTANCES = 3000;
+
+    private static int TIME_TO_SCALE_INSTANCES = 2000;
+    private static Timer scaleTimer = new Timer();
 
     private static String LoadBalancerIp;
 
     private static final String AMI_ID = "ami-7a38c51a";
-    private static ExecutorService executor;
 
     private static ConcurrentHashMap<String, IMetric> machineCurrentMetric = new ConcurrentHashMap<>();
 
@@ -47,26 +51,26 @@ public class EC2LoadBalancer {
     private static int MINMACHINENUM = 1;
     private static int MAXMACHINENUM = 3;
 
-    private static int MINIMUM_CPU_UTIL=20;
-    private static int MAXIMUM_CPU_UTIL=50;
+    private static int MINIMUM_CPU_UTIL=40;
+    private static int MAXIMUM_CPU_UTIL=60;
 
 
 
     public static void main(String[] args) throws Exception {
 
-
-
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
         LoadBalancerIp = InetAddress.getLocalHost().getHostAddress();
         server.createContext("/f.html", new MyHandler());
-        executor = Executors.newFixedThreadPool(4);
-        server.setExecutor(executor); // creates a default executor
+        server.setExecutor(new ThreadPoolExecutor(Integer.MAX_VALUE, Integer.MAX_VALUE, 1200, TimeUnit.SECONDS, new ArrayBlockingQueue(100))); // creates a default executor
         createInstanceList();
-        for (Map.Entry<String, Instance> entry : runningInstances.entrySet()) {
+        for (Map.Entry<String, Instance> entry : EC2LBGeneralOperations.getRunningInstancesArray().entrySet()) {
             updateInstanceMetric(entry.getValue(), BigInteger.ZERO, true);
         }
         server.start();
-        startTimer();
+
+       startTimer();
+
+
     }
 
     public static void createInstanceList(){
@@ -75,9 +79,11 @@ public class EC2LoadBalancer {
             EC2LBGeneralOperations.init();
             DynamoDBGeneralOperations.init();
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
-            runningInstances = EC2LBGeneralOperations.getRunningInstancesArray();
+//            runningInstances = EC2LBGeneralOperations.getRunningInstancesArray();
+//            activeInstances = EC2LBGeneralOperations.getActiveInstancesArray();
+//            System.out.println(activeInstances);
         }catch(Exception e){
-
+            e.printStackTrace();
         }
     }
 
@@ -98,11 +104,10 @@ public class EC2LoadBalancer {
     static class MyHandler implements HttpHandler {
         public void handle(final HttpExchange exchange) throws IOException {
 
-
-            new Thread(new Runnable(){
-
-                //@Override
+            new Thread(new Runnable() {
+                @Override
                 public void run() {
+
                     Headers responseHeaders = exchange.getResponseHeaders();
                     responseHeaders.set("Content-Type", "text/html");
                     HashMap map = queryToMap(exchange.getRequestURI().getQuery());
@@ -110,7 +115,7 @@ public class EC2LoadBalancer {
                     BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
 
                     String[] bestMachine = getBestMachineIp(numberToBeFactored);
-                    Instance instance = runningInstances.get(bestMachine[0]);
+                    Instance instance = EC2LBGeneralOperations.getRunningInstancesArray().get(bestMachine[0]);
                     BigInteger cost = new BigInteger(bestMachine[1]);
 
                     if (instance == null){
@@ -130,8 +135,7 @@ public class EC2LoadBalancer {
                             HttpGet request = new HttpGet(url);
 
                             HttpResponse response = client.execute(request);
-                            System.out.println("Response Code : "
-                                    + response.getStatusLine().getStatusCode());
+
 
                             BufferedReader rd = new BufferedReader(
                                     new InputStreamReader(response.getEntity().getContent(),StandardCharsets.UTF_8));
@@ -150,11 +154,6 @@ public class EC2LoadBalancer {
                                 os.write(result.toString().getBytes());
                                 os.close();
                             }catch(IOException e){
-//                                try {
-//                                    updateInstanceMetric(instance, cost, false);
-//                                }catch(InterruptedException ei){
-//                                    ei.printStackTrace();
-//                                }
                                 e.printStackTrace();
                             }
                         }catch(Exception e2){
@@ -164,31 +163,25 @@ public class EC2LoadBalancer {
                 }
             }).start();
         }
+
+
     }
 
     public static void startTimer(){
 
         // scheduling the task at interval
 
-        timer.scheduleAtFixedRate(new TimerTask() {
+
+        scaleTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 scaleInstances();
-                updateRunningInstances();
             }
-        }, TIME_TO_REFRESH_INSTANCES, TIME_TO_REFRESH_INSTANCES);
+        }, TIME_TO_SCALE_INSTANCES, TIME_TO_SCALE_INSTANCES);
 
     }
 
-    public static void updateRunningInstances(){
-        runningInstances = null;
-        runningInstances = EC2LBGeneralOperations.getRunningInstancesArray();
-        EC2LBGeneralOperations.updateRunningInstances();
-        System.out.println("Running instances:  "+runningInstances.size());
-    }
-
-
-
+    
     /**
      * Gets best machine to process a request according to its current cost and estimated cost
      * for the number to factorize
@@ -203,7 +196,7 @@ public class EC2LoadBalancer {
         String[] results = new String[2];
 
         // update running runningInstances
-        updateRunningInstances();
+        EC2LBGeneralOperations.updateRunningInstances();
 
         // estimated/direct cost for the numberToFactorize
         BigInteger estimatedCost = DynamoDBGeneralOperations.estimateCostScan(numberToFactorize);
@@ -218,11 +211,11 @@ public class EC2LoadBalancer {
         System.out.println("instSize: "+instSize);
         if(instSize>0){
 
-            bestInstance = runningInstances.entrySet().iterator().next().getValue();
+            bestInstance = EC2LBGeneralOperations.getRunningInstancesArray().entrySet().iterator().next().getValue();
 
             // Iterates for every running instance
             // Search for the instance with the lowest number of recalcs
-            for (Map.Entry<String, Instance> entry : runningInstances.entrySet()) {
+            for (Map.Entry<String, Instance> entry : EC2LBGeneralOperations.getRunningInstancesArray().entrySet()) {
 
                 IMetric metric = machineCurrentMetric.get(entry.getValue().getInstanceId());
                 if (metric != null) {
@@ -273,7 +266,7 @@ public class EC2LoadBalancer {
             long offsetInMilliseconds = 1000 * 60 * 2;
 
             double overallCPUAverage = 0;
-            for (Instance instance : runningInstances.values()) {
+            for (Instance instance : EC2LBGeneralOperations.getActiveInstancesArray().values()) {
                 double dpWAverage = 0;
                 String name = instance.getInstanceId();
 
@@ -289,7 +282,6 @@ public class EC2LoadBalancer {
                 GetMetricStatisticsResult getMetricStatisticsResult =
                         EC2LBGeneralOperations.cloudWatch.getMetricStatistics(request);
                 List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
-
                 int datapointCount = 0;
                 for (Datapoint dp : datapoints) {
                     datapointCount++;
@@ -300,25 +292,26 @@ public class EC2LoadBalancer {
                     lowConsumptionMachineId = name;
                 }
                 overallCPUAverage+=dpWAverage;
-                System.out.println(" CPU utilization for instance " + name + " = " + dpWAverage);
+                //System.out.println(" CPU utilization for instance " + name + " = " + dpWAverage);
 
 
             }
 
-            overallCPUAverage /=EC2LBGeneralOperations.getActiveInstances();
+            overallCPUAverage /=EC2LBGeneralOperations.getRunningInstances();
 
-            System.out.println("overall: "+overallCPUAverage+"get: "+EC2LBGeneralOperations.getActiveInstances()+"MAX: "+MAXMACHINENUM);
+            System.out.println("sizzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz: "+EC2LBGeneralOperations.getActiveInstancesArray().size());
+            System.out.println("overall: "+overallCPUAverage+" ,get: "+EC2LBGeneralOperations.getActiveInstances()+"MAX: "+MAXMACHINENUM);
             if (overallCPUAverage > MAXIMUM_CPU_UTIL && EC2LBGeneralOperations.getActiveInstances() < MAXMACHINENUM) {
                 System.out.println(" [INFO] Start an instance! ");
                 EC2LBGeneralOperations.startInstance(AMI_ID);
             }
 
-            if (overallCPUAverage < MINIMUM_CPU_UTIL && EC2LBGeneralOperations.getRunningInstances() > MINMACHINENUM) {
+            if (overallCPUAverage < MINIMUM_CPU_UTIL && EC2LBGeneralOperations.getActiveInstances() > MINMACHINENUM) {
                 System.out.println(" [INFO] Fuck an instance! " + lowConsumptionMachineId);
                 EC2LBGeneralOperations.terminateInstance(lowConsumptionMachineId);
             }
 
-            System.out.println("You have " + overallCPUAverage + " Amazon EC2 average consumption motherfucker! and "+EC2LBGeneralOperations.getRunningInstances()+" instances.");
+           // System.out.println("You have " + overallCPUAverage + " Amazon EC2 average consumption motherfucker! and "+EC2LBGeneralOperations.getRunningInstances()+" instances.");
 
 
         }catch(Exception e){

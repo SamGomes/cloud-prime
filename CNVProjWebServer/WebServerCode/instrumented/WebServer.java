@@ -36,7 +36,7 @@ public class WebServer{
 
         //instanceId = getInstanceId();
 	    server = HttpServer.create(new InetSocketAddress(8000), 1000);
-	    server.setExecutor(new ThreadPoolExecutor(5, 20, 1200, TimeUnit.SECONDS, new ArrayBlockingQueue(100))); // creates a default executor
+	    server.setExecutor(new ThreadPoolExecutor(Integer.MAX_VALUE, Integer.MAX_VALUE, 1200, TimeUnit.SECONDS, new ArrayBlockingQueue(100))); // creates a default executor
 		server.createContext("/f.html", new MyHandler());
 	    server.start();
 	}
