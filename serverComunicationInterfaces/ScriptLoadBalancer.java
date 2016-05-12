@@ -15,6 +15,9 @@ public class ScriptLoadBalancer {
 
     //--------connect to localhost------
     private static String URL = "http://localhost:8000/f.html?n=";
+
+//    private static String URL = "http://52.39.233.82:8000/f.html?n=";
+
     private static int MAX_BITS = 60;
     private static int NUMBERS_INTERVAL = 5;
 
