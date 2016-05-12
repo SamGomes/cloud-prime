@@ -17,39 +17,39 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-
+/**
+ * WebServer class responsible to factorize numbers requested to the Load Balancer
+ */
 public class WebServer{
- 
 
 	private static String myIP;
     private static final String MSS_CENTRAL_TABLE = "MSSCentralTable";
     private static final String CENTRAL_TABLE_COST_ATTRIBUTE = "cost";
+	private static final String CENTRAL_TABLE_NUMBER_TO_FACTORIZE_ATTRIBUTE = "numberToBeFactored";
     public static final long NANO_TO_MILI = 1000000;
-
-
     private static HttpServer server;
+
 	public static void main(String[] args) throws Exception {
 		DynamoDBWebServerGeneralOperations.init();
 		myIP = InetAddress.getLocalHost().getHostAddress();
-		DynamoDBWebServerGeneralOperations.createTable(MSS_CENTRAL_TABLE, "numberToBeFactored",
-                new String[] {CENTRAL_TABLE_COST_ATTRIBUTE});
+		DynamoDBWebServerGeneralOperations.createTable(
+				MSS_CENTRAL_TABLE,
+				CENTRAL_TABLE_NUMBER_TO_FACTORIZE_ATTRIBUTE,
+                new String[] {CENTRAL_TABLE_COST_ATTRIBUTE}
+		);
 
-        //instanceId = getInstanceId();
 	    server = HttpServer.create(new InetSocketAddress(8000), 1000);
 	    server.setExecutor(new ThreadPoolExecutor(Integer.MAX_VALUE, Integer.MAX_VALUE, 1200, TimeUnit.SECONDS, new ArrayBlockingQueue(100))); // creates a default executor
 		server.createContext("/f.html", new MyHandler());
 	    server.start();
 	}
- 
-
-
-
 }
 
 class MyHandler implements HttpHandler {
 
 	private static final String MSS_CENTRAL_TABLE = "MSSCentralTable";
 	private static final String CENTRAL_TABLE_COST_ATTRIBUTE = "cost";
+	private static final String CENTRAL_TABLE_NUMBER_TO_FACTORIZE_ATTRIBUTE = "numberToBeFactored";
 	private static ConcurrentLinkedQueue knownNumbers = new ConcurrentLinkedQueue();
 	private static int CACHESIZE = 100;
 
@@ -59,18 +59,13 @@ class MyHandler implements HttpHandler {
 		HashMap map = queryToMap(exchange.getRequestURI().getQuery());
 		BigInteger numberToBeFactored = new BigInteger(map.get("n").toString());
 		OutputStream os = null;
-		try{
-			long startTime = System.nanoTime();
 
+		try {
 			Process pro = Runtime.getRuntime().exec("java -cp WebServerCode/instrumented/instrumentedOutput FactorizeMain " + numberToBeFactored);
 			pro.waitFor();
 
-			long endTime = System.nanoTime();
-			String response = saveStats("factorization result: ",numberToBeFactored,
-					Thread.currentThread().getId(), pro.getInputStream(),
-					(endTime-startTime)/WebServer.NANO_TO_MILI);
+			String response = saveStats(numberToBeFactored, pro.getInputStream());
 			System.out.print(response+"\n");
-
 
 			exchange.sendResponseHeaders(200, response.length());
 			os = exchange.getResponseBody();
@@ -78,24 +73,28 @@ class MyHandler implements HttpHandler {
 
 			os.close();
 
-
-		}catch(Exception e){
+		} catch(Exception e) {
 			e.printStackTrace();
-		}finally {
-
 		}
 	}
 
 
-	public String saveStats(String name,BigInteger numberToBeFactored,
-								   long id, InputStream ins, long timeToFactor) throws Exception {
+	/**
+	 * Saves new number to factorize on DynamoDB and in known numbers array, which serves as a cache
+	 * If the number already exists on known numbers array doesn't access the database
+	 *
+	 * @param numberToBeFactored number to factorize
+	 * @param ins input stream containing the factorization result
+	 * @return result of factorization
+     * @throws Exception
+     */
+	public String saveStats(BigInteger numberToBeFactored, InputStream ins) throws Exception {
 		String line;
 		String result;
 
-
 		BufferedReader in = new BufferedReader(
 				new InputStreamReader(ins));
-		result=name + " " +in.readLine();
+		result = "factorization result: " + in.readLine();
 
 		DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
 		Date date = new Date();
@@ -108,17 +107,25 @@ class MyHandler implements HttpHandler {
 
 			synchronized(this) {
 
-				System.out.println("knownNumbers: " + knownNumbers.toString());
+				System.out.println("Known Numbers: " + knownNumbers.toString());
 				if (knownNumbers.size() > CACHESIZE) {
 					knownNumbers.remove(knownNumbers.iterator().next());
 				}
 
-
 				if (!knownNumbers.contains(numberToBeFactored)) {
 					knownNumbers.add(numberToBeFactored);
-					DynamoDBWebServerGeneralOperations.insertTuple(MSS_CENTRAL_TABLE,
-							new String[]{"numberToBeFactored", String.valueOf(numberToBeFactored),
-									CENTRAL_TABLE_COST_ATTRIBUTE, line});
+
+					// Inserts number to factorize in MSS Central Table on DynamoDB
+					DynamoDBWebServerGeneralOperations.insertTuple(
+							MSS_CENTRAL_TABLE,
+							new String[]{
+									CENTRAL_TABLE_NUMBER_TO_FACTORIZE_ATTRIBUTE,
+									String.valueOf(numberToBeFactored),
+									CENTRAL_TABLE_COST_ATTRIBUTE,
+									line
+							}
+					);
+
 				} else {
 					knownNumbers.remove(numberToBeFactored);
 					knownNumbers.add(numberToBeFactored);

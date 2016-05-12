@@ -24,7 +24,6 @@ import com.amazonaws.services.ec2.model.*;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
@@ -50,8 +49,7 @@ public class EC2LBGeneralOperations {
      */
 
     static AmazonEC2 ec2;
-    static AmazonCloudWatchClient cloudWatch; 
-
+    static AmazonCloudWatchClient cloudWatch;
     
     private static int runningInstances = 0;
     private static int activeInstances = 0;
@@ -85,7 +83,6 @@ public class EC2LBGeneralOperations {
      * @see com.amazonaws.ClientConfiguration
      * 
      */
-     
 
      static void init() throws Exception {
 
@@ -106,7 +103,6 @@ public class EC2LBGeneralOperations {
         }
         ec2 = new AmazonEC2Client(credentials);
         cloudWatch= new AmazonCloudWatchClient(credentials);
-        
 
         ec2.setEndpoint("ec2.us-west-2.amazonaws.com");
         cloudWatch.setEndpoint("monitoring.us-west-2.amazonaws.com"); 
@@ -114,18 +110,21 @@ public class EC2LBGeneralOperations {
         instances = new ArrayList<>();
 
         instancesState = new ConcurrentHashMap<>();
-
         runningInstancesArray = new ConcurrentHashMap<>();
         activeInstancesArray = new ConcurrentHashMap<>();
 
         LoadBalancerExpectionList = new ArrayList<>();
 
-
-
         updateRunningInstances();
         startTimer(); // Starts timer for refreshing instances
     }
 
+    /**
+     * Starts a new instance
+     * @param ami - AMI identifier of a WebServer
+     * @return newInstanceId - id of the new instance created
+     * @throws Exception
+     */
     static Instance startInstance(String ami) throws Exception {
 
         System.out.println("Starting a new instance.");
@@ -141,15 +140,19 @@ public class EC2LBGeneralOperations {
                 .withSecurityGroups("CNV-ssh+http")
                 .withMonitoring(true);
 
-        RunInstancesResult runInstancesResult =
-                ec2.runInstances(runInstancesRequest);
-        Instance newInstanceId = runInstancesResult.getReservation().getInstances()
-                .get(0);
+        RunInstancesResult runInstancesResult = ec2.runInstances(runInstancesRequest);
+
+        Instance newInstanceId = runInstancesResult.getReservation().getInstances().get(0);
 
         return newInstanceId;
     }
-    
-    static void terminateInstance(String instanceId) throws Exception {
+
+    /**
+     * Terminates an instance
+     * @param instanceId - id of an instance
+     * @throws Exception
+     */
+    public static void terminateInstance(String instanceId) throws Exception {
         System.out.println("Terminating instance.");
         
         TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
@@ -157,7 +160,9 @@ public class EC2LBGeneralOperations {
         ec2.terminateInstances(termInstanceReq);
     }
 
-
+    /**
+     * Updates periodically health checks
+     */
     public static void startTimer(){
 
         timer.scheduleAtFixedRate(new TimerTask() {
@@ -172,8 +177,9 @@ public class EC2LBGeneralOperations {
 
     }
 
-
-
+    /**
+     * Simulates Health Check on instances
+     */
     public synchronized static void tryInstances(){
 
         instancesState.clear();
@@ -194,13 +200,14 @@ public class EC2LBGeneralOperations {
             try {
                 response = client.execute(request);
                 statusCode = response.getStatusLine().getStatusCode();
-                System.out.println("Responsed: " + statusCode);
+                System.out.println("Responded: " + statusCode);
             } catch (IOException e) {
                 System.out.println("New instance unreachable");
             }
-            if(statusCode!=200){
+
+            if(statusCode!=200) {
                 instancesState.put(instance,"false");
-            }else {
+            } else {
                 instancesState.put(instance, "true");
             }
         }
@@ -256,10 +263,11 @@ public class EC2LBGeneralOperations {
         LoadBalancerExpectionList.add(ip);
     }
 
-    static synchronized int getActiveInstances(){
+    public static synchronized int getActiveInstances(){
         return activeInstances;
     }
-    static synchronized int getRunningInstances(){
+
+    public static synchronized int getRunningInstances(){
         return runningInstances;
     }
 

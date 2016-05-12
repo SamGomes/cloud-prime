@@ -10,8 +10,6 @@ public class FactInstr {
 
     static DynamoDBWebServerGeneralOperations dbgo;
 
-
-
     private static PrintStream out = null;
     private static int i_count = 0, b_count = 0, m_count = 0;
     private static HashMap methodStack = new HashMap();
@@ -48,18 +46,15 @@ public class FactInstr {
     }
     
     public static synchronized void printICount(String foo) {
-    	//System.out.println("invocation stack info: ");
     	for (Iterator it = methodStack.entrySet().iterator(); it.hasNext();) {
     		Map.Entry pairs = (Map.Entry) it.next();
-    		//System.out.println("found method in stack: "+pairs.getKey() + ", ocurred " + pairs.getValue()+" times.");
     		if(pairs.getKey().equals("recCalcFactors")){
     			System.out.println(pairs.getValue());
                 return;
     		}
 
     	}
-        System.out.println(0);
-        //System.out.println("general results: "+i_count + " instructions in " + b_count + " basic blocks were executed in " + m_count + " methods.");
+        System.out.println(1);
     }
     
 
@@ -75,7 +70,7 @@ public class FactInstr {
     public static synchronized void putInStack(String methodName) {
     	Integer i = (Integer) methodStack.get(methodName);
     	if (i==null){
-    		i= new Integer(0);
+    		i= new Integer(1);
     	}
     	Integer inc = new Integer(i.intValue()+1);
     	

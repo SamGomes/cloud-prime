@@ -6,6 +6,10 @@ import java.util.NavigableSet;
 import java.util.Scanner;
 import java.util.TreeSet;
 
+/**
+ * Estimator trial tests cost estimation given key-value pairs
+ * of number to be factored and its costs of computation
+ */
 public class EstimatorTrial {
 
     static HashMap<BigInteger, BigInteger> costs = new HashMap<>();
@@ -17,9 +21,6 @@ public class EstimatorTrial {
 
         // populate array of costs
         populateCosts();
-
-        // print all costs
-
 
         // ask for a number
         System.out.println("Give me a number to be factored:");
@@ -34,10 +35,9 @@ public class EstimatorTrial {
         BigInteger estimatedCost = resK[0];
         int isEstimated = resV[0];
 
-        //print cost choosen and why
+        //print cost chosen and why
         printCost(nFactor, estimatedCost, isEstimated);
 
-        //test more numbers
 
     }
 
@@ -70,7 +70,6 @@ public class EstimatorTrial {
         for (BigInteger x : array) { values.add(x); }
         BigInteger l = values.floor(val);
         BigInteger h = values.ceiling(val);
-        //return new int[]{lower, higher};
         BigDecimal value = new BigDecimal(val);
 
         BigDecimal finalCost = new BigDecimal(0);
@@ -109,10 +108,6 @@ public class EstimatorTrial {
 
         return finalCost.toBigInteger();
     }
-//
-//    public static int calculate3SimpleRuleEstimatedCost(BigInteger[] array, BigInteger val){
-//
-//    }
 
     private static void populateCosts() {
         BigInteger[] madeUpFactors = {
@@ -149,38 +144,4 @@ public class EstimatorTrial {
             costs.put(madeUpFactors[i], madeUpCosts[i]);
         }
     }
-
-    // Solution from http://stackoverflow.com/questions/18581598/method-that-searches-an-array-to-find-certain-number-of-nearest-values
-//    public static int[] nearestK(Integer[] a, int val, int k) {
-//        // omitted your checks for brevity
-//        final int value = val; // needs to be final for the comparator, you can also make the parameter final and skip this line
-//        Integer[] copy = new Integer[a.length]; // copy the array using autoboxing
-//        for (int i = 0; i < a.length; i++) {
-//            copy[i] = a[i];
-//        }
-//        Arrays.sort(copy, new Comparator<Integer>() { // sort it with a custom comparator
-//            @Override
-//            public int compare(Integer o1, Integer o2) {
-//                int distance1 = Math.abs(value - o1);
-//                int distance2 = Math.abs(value - o2);
-//                return Integer.compare(distance1, distance2);
-//            }
-//        });
-//        int[] answer = new int[k]; // pick the first k elements
-//        for (int i = 0; i < answer.length; i++) {
-//            answer[i] = copy[i];
-//        }
-//        return answer;
-//    }
-
-
-
-//    public static int[] findNearestCostInterval(Integer[] array, int val){
-//        NavigableSet<Integer> values = new TreeSet<Integer>();
-//        for (int x : array) { values.add(x); }
-//        int lower = values.floor(val);
-//        int higher = values.ceiling(val);
-//        return new int[]{lower, higher};
-//    }
-
 }
