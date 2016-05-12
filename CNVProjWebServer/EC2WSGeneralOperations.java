@@ -102,7 +102,8 @@ public class EC2WSGeneralOperations {
         startTimer(); // Starts timer for refreshing instances
     }
 
-    static Instance startInstance( DescribeInstancesResult describeInstancesRequest,List<Reservation> reservations,ArrayList<Instance> instances,String role,String ami) throws Exception {
+    static Instance startInstance( DescribeInstancesResult describeInstancesRequest,List<Reservation> reservations,
+                                            ArrayList<Instance> instances,String role,String ami) throws Exception {
 
         System.out.println("runningInstances: " + runningInstances + ".");
 

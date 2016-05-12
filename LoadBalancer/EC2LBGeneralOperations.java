@@ -21,11 +21,17 @@ import com.amazonaws.services.cloudwatch.AmazonCloudWatchClient;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
 import com.amazonaws.services.ec2.model.*;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpConnectionParams;
+import org.apache.http.params.HttpParams;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.io.IOException;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class EC2LBGeneralOperations {
@@ -43,18 +49,29 @@ public class EC2LBGeneralOperations {
      *      the credentials file in your source directory.
      */
 
-    static AmazonEC2      ec2;
+    static AmazonEC2 ec2;
     static AmazonCloudWatchClient cloudWatch; 
 
     
     private static int runningInstances = 0;
+    private static int activeInstances = 0;
     private static ArrayList<Instance> instances;
+
+    // instances states - true if is healthy : false if cant receive requests
+    private static ConcurrentHashMap<Instance,String> instancesState; //to check if its is running right
+
+    // Healthy instances that are available to receive requests
     private static ConcurrentHashMap<String,Instance> runningInstancesArray;
+
+    // Every instance that belongs to the loadBalancer (non-terminated ones)
+    private static ConcurrentHashMap<String,Instance> activeInstancesArray;
+
     private static ArrayList<String> LoadBalancerExpectionList;
     private static Timer timer = new Timer();
     private static DescribeInstancesResult describeInstancesRequest;
     private static List<Reservation> reservations;
     private static int TIME_TO_REFRESH_INSTANCES = 5000;
+    private static int HEALTH_CHECK_PERIOD = 3000;
       
     /**
      * The only information needed to create a client are security credentials
@@ -94,15 +111,22 @@ public class EC2LBGeneralOperations {
         ec2.setEndpoint("ec2.us-west-2.amazonaws.com");
         cloudWatch.setEndpoint("monitoring.us-west-2.amazonaws.com"); 
 
-        instances = new ArrayList<Instance>();
-        runningInstancesArray = new ConcurrentHashMap<>();
-        LoadBalancerExpectionList = new ArrayList<String>();
+        instances = new ArrayList<>();
 
-        updateRunningInstances(); 
+        instancesState = new ConcurrentHashMap<>();
+
+        runningInstancesArray = new ConcurrentHashMap<>();
+        activeInstancesArray = new ConcurrentHashMap<>();
+
+        LoadBalancerExpectionList = new ArrayList<>();
+
+
+
+        updateRunningInstances();
         startTimer(); // Starts timer for refreshing instances
     }
 
-    static Instance startInstance( DescribeInstancesResult describeInstancesRequest,List<Reservation> reservations,ArrayList<Instance> instances,String role,String ami) throws Exception {
+    static Instance startInstance(String ami) throws Exception {
 
         System.out.println("runningInstances: " + runningInstances + ".");
 
@@ -125,23 +149,20 @@ public class EC2LBGeneralOperations {
         Instance newInstanceId = runInstancesResult.getReservation().getInstances()
                 .get(0);
 
-        runningInstances++;
+
+
         return newInstanceId;
     }
     
-    static void terminateInstance(String instanceId, ArrayList instances) throws Exception {
+    static void terminateInstance(String instanceId) throws Exception {
         
         System.out.println("Terminating instance.");
         
          TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
          termInstanceReq.withInstanceIds(instanceId);
          ec2.terminateInstances(termInstanceReq);
-         runningInstances--;
     }
 
-    public static ArrayList<Instance> getInstances(){
-        return instances;
-    }
 
     public static void startTimer(){
 
@@ -149,61 +170,111 @@ public class EC2LBGeneralOperations {
             @Override
             public void run() {
                 updateRunningInstances();
+                tryInstances();
+                System.out.println("instancesState: "+instancesState.values().toString());
+                System.out.println("activeIntances: "+activeInstances);
+                System.out.println("runningIntances: "+runningInstances);
+
+
             }
         }, TIME_TO_REFRESH_INSTANCES, TIME_TO_REFRESH_INSTANCES);
+
     }
 
-    static int getRunningInstances(){
-         return runningInstances;
-     }
 
-    public static void updateRunningInstances(){
+
+    public synchronized static void tryInstances(){
+
+        instancesState.clear();
+
+        for(Instance instance :instances) {
+
+
+            final HttpParams httpParams = new BasicHttpParams();
+            HttpConnectionParams.setSoTimeout(httpParams,2000);
+
+
+            HttpClient client = new DefaultHttpClient(httpParams);
+            String url = "http://" + instance.getPublicIpAddress() + ":8000/f.html?n=2";
+            HttpGet request = new HttpGet(url);
+
+            HttpResponse response;
+            int statusCode = 404;
+
+            // While the response code is not 200 keep sending requests
+            // This will ensure the web server is already running when we forward the request
+
+            try {
+                response = client.execute(request);
+                statusCode = response.getStatusLine().getStatusCode();
+                System.out.println("Response: " + statusCode);
+            } catch (IOException e) {
+                System.out.println("New instance unreachable");
+
+            }
+            if(statusCode!=200){
+                instancesState.put(instance,"false");
+            }else {
+                instancesState.put(instance, "true");
+            }
+        }
+
+    }
+
+
+
+    public synchronized static void updateRunningInstances(){
         describeInstancesRequest = ec2.describeInstances();
         reservations = describeInstancesRequest.getReservations();
 
         instances.clear();
         runningInstancesArray.clear();
         runningInstances = 0;
-        
+        activeInstancesArray.clear();
+        activeInstances = 0;
+
         for (Reservation reservation : reservations) {
             instances.addAll(reservation.getInstances());
         }
-        
+
         for(Instance instance :instances){
             if (!LoadBalancerExpectionList.contains(instance.getPublicIpAddress())){
                 String state = instance.getState().getName();
 
                 if (state.equals("running")){
-                    runningInstances++;
-                    //runningInstancesArray.add(instance);
-                    runningInstancesArray.put(instance.getInstanceId(),instance);
+                    if(instancesState.get(instance)=="true") {
+                        runningInstances++;
+                        runningInstancesArray.put(instance.getInstanceId(), instance);
+                    }
+                }
+                if (state.equals("running")){
+                    activeInstances++;
+                    activeInstancesArray.put(instance.getInstanceId(),instance);
                 }
             }else{
                 System.out.println("Found Load Balancer " + instance.getPrivateIpAddress());
             }
         }
+
     }
+
     public static ConcurrentHashMap<String,Instance> getRunningInstancesArray(){
         return runningInstancesArray;
      }
+
+    public static ConcurrentHashMap<String,Instance> getActiveInstancesArray(){
+        return activeInstancesArray;
+    }
+
     public static void addLoadBalancerToExceptionList(String ip){
         LoadBalancerExpectionList.add(ip);
     }
 
-    public static Instance getInstance(String id){
-        return runningInstancesArray.get(id);
-
+    static synchronized int getActiveInstances(){
+        return activeInstances;
+    }
+    static synchronized int getRunningInstances(){
+        return runningInstances;
     }
 
-    public static String getInstanceStatus(String instanceId) {
-        DescribeInstancesRequest describeInstanceRequest = new DescribeInstancesRequest().withInstanceIds(instanceId);
-        DescribeInstancesResult describeInstanceResult = ec2.describeInstances(describeInstanceRequest);
-        return describeInstanceResult.getReservations().get(0).getInstances().get(0).getState().getName();
-    }
-
-    public static Instance getInstanceById(String instanceId){
-        DescribeInstancesRequest describeInstanceRequest = new DescribeInstancesRequest().withInstanceIds(instanceId);
-        DescribeInstancesResult describeInstanceResult = ec2.describeInstances(describeInstanceRequest);
-        return describeInstanceResult.getReservations().get(0).getInstances().get(0);
-    }
 }

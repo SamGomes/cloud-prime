@@ -1,25 +1,26 @@
+import java.math.BigInteger;
 
 public class RequestTiming {
 
 //    private static final long NANO_TO_MILI = 1000000;
-    private long timeOfRequest;
-    private long requestTime;
+    private BigInteger timeOfRequest;
+    private BigInteger requestTime;
 
-    public RequestTiming (long requestTime) {
-        this.timeOfRequest = System.currentTimeMillis();
+    public RequestTiming (BigInteger requestTime) {
+        this.timeOfRequest = BigInteger.valueOf(System.currentTimeMillis());
 //        this.timeOfRequest = System.nanoTime()/NANO_TO_MILI;
         this.requestTime = requestTime;
     }
 
-    public long getTimeOfRequest() {
+    public BigInteger getTimeOfRequest() {
         return timeOfRequest;
     }
 
-    public void setTimeOfRequest(long date) {
+    public void setTimeOfRequest(BigInteger date) {
         this.timeOfRequest = date;
     }
 
-    public long getRequestTime() {
+    public BigInteger getRequestTime() {
         return requestTime;
     }
 /*
@@ -36,8 +37,8 @@ public class RequestTiming {
      * then the request didn't finnish being processed
      * @return long time remaining to process this request
      */
-    public long getTimeToFinnishProcessing() {
-        return (timeOfRequest + requestTime) - System.currentTimeMillis();
+    public BigInteger getTimeToFinnishProcessing() {
+        return (timeOfRequest.add(requestTime)).subtract(BigInteger.valueOf(System.currentTimeMillis()));
 //        return ((timeOfRequest + requestTime) - System.nanoTime())/NANO_TO_MILI;
     }
 

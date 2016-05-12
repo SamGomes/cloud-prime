@@ -6,7 +6,7 @@ public class IMetric{
 
 
     private ConcurrentLinkedQueue<RequestTiming> reqList;
-    private BigInteger cost;
+    private BigInteger cost; // AKA Recalcs
     private double CPUUtil;
 
     public IMetric(){
@@ -30,18 +30,18 @@ public class IMetric{
 
     public void addToReqList(String time) {
         System.out.println("REQLIST: " + reqList);
-        this.reqList.add(new RequestTiming(new Long(time)));
+        this.reqList.add(new RequestTiming(new BigInteger(time)));
     }
 
     public void subFromReqList(String time) {
         System.out.println("REQLIST: " + reqList);
-        removeOldestEqualRequestTime(new Long(time));
+        removeOldestEqualRequestTime(new BigInteger(time));
     }
 
     // Removes the oldest request time equal to oldestTime
-    private void removeOldestEqualRequestTime(long oldestTime) {
+    private void removeOldestEqualRequestTime(BigInteger oldestTime) {
         for (RequestTiming req : this.reqList) {
-            if (req.getRequestTime() == oldestTime) {
+            if (req.getRequestTime().equals(oldestTime)) {
                 this.reqList.remove(req);
             }
         }
@@ -51,17 +51,30 @@ public class IMetric{
         this.cost = cost;
     }
 
+    public void addCost(BigInteger cost) {
+        this.cost= this.cost.add(cost);
+    }
+    public void subCost(BigInteger cost) {
+
+        this.cost=this.cost.subtract(cost);
+    }
+
     public void setCPUUtil(double CPUUtil) {
         this.CPUUtil = CPUUtil;
     }
 
-    public long getTimeToFinnishEveryRequestProcessing(){
+    public BigInteger getTimeToFinnishEveryRequestProcessing(){
 
-        long totalTime = 0;
-        for (RequestTiming req : reqList) {
-            totalTime = totalTime + req.getTimeToFinnishProcessing();
+        BigInteger timeToFinnish = BigInteger.ZERO;
+
+        for(RequestTiming time : reqList){
+            BigInteger temp = time.getRequestTime();
+            if(temp.compareTo(timeToFinnish)==1) {
+                timeToFinnish = temp;
+            }
         }
-        return totalTime;
+
+        return timeToFinnish;
     }
 
 }
