@@ -40,7 +40,7 @@ public class EC2LoadBalancer {
 
     private static String LoadBalancerIp;
 
-    private static final String AMI_ID = "ami-7a38c51a";
+    private static final String AMI_ID = "ami-20659840";
 
     private static ConcurrentHashMap<String, IMetric> machineCurrentMetric = new ConcurrentHashMap<>();
 
