@@ -33,9 +33,9 @@ public class EC2LoadBalancer {
 //    private static ConcurrentHashMap<String,Instance> runningInstances;
 //    private static ConcurrentHashMap<String,Instance> activeInstances;
 
-    private static int TIME_TO_REFRESH_INSTANCES = 3000;
+    private static int TIME_TO_REFRESH_INSTANCES = 5000;
 
-    private static int TIME_TO_SCALE_INSTANCES = 2000;
+    private static int TIME_TO_SCALE_INSTANCES = 60000;
     private static Timer scaleTimer = new Timer();
 
     private static String LoadBalancerIp;
@@ -79,9 +79,6 @@ public class EC2LoadBalancer {
             EC2LBGeneralOperations.init();
             DynamoDBGeneralOperations.init();
             EC2LBGeneralOperations.addLoadBalancerToExceptionList(LoadBalancerIp);
-//            runningInstances = EC2LBGeneralOperations.getRunningInstancesArray();
-//            activeInstances = EC2LBGeneralOperations.getActiveInstancesArray();
-//            System.out.println(activeInstances);
         }catch(Exception e){
             e.printStackTrace();
         }

@@ -71,7 +71,7 @@ public class EC2LBGeneralOperations {
     private static DescribeInstancesResult describeInstancesRequest;
     private static List<Reservation> reservations;
     private static int TIME_TO_REFRESH_INSTANCES = 5000;
-    private static int HEALTH_CHECK_PERIOD = 3000;
+    private static int HEALTH_CHECK_PERIOD = 2000;
       
     /**
      * The only information needed to create a client are security credentials
@@ -128,13 +128,10 @@ public class EC2LBGeneralOperations {
 
     static Instance startInstance(String ami) throws Exception {
 
-        System.out.println("runningInstances: " + runningInstances + ".");
-
         System.out.println("Starting a new instance.");
 
         RunInstancesRequest runInstancesRequest =
                 new RunInstancesRequest();
-
 
         runInstancesRequest.withImageId(ami)
                 .withInstanceType("t2.micro")
@@ -149,18 +146,15 @@ public class EC2LBGeneralOperations {
         Instance newInstanceId = runInstancesResult.getReservation().getInstances()
                 .get(0);
 
-
-
         return newInstanceId;
     }
     
     static void terminateInstance(String instanceId) throws Exception {
-        
         System.out.println("Terminating instance.");
         
-         TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
-         termInstanceReq.withInstanceIds(instanceId);
-         ec2.terminateInstances(termInstanceReq);
+        TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
+        termInstanceReq.withInstanceIds(instanceId);
+        ec2.terminateInstances(termInstanceReq);
     }
 
 
@@ -171,11 +165,8 @@ public class EC2LBGeneralOperations {
             public void run() {
                 updateRunningInstances();
                 tryInstances();
-                System.out.println("instancesState: "+instancesState.values().toString());
                 System.out.println("activeIntances: "+activeInstances);
                 System.out.println("runningIntances: "+runningInstances);
-
-
             }
         }, TIME_TO_REFRESH_INSTANCES, TIME_TO_REFRESH_INSTANCES);
 
@@ -189,11 +180,8 @@ public class EC2LBGeneralOperations {
 
         for(Instance instance :instances) {
 
-
             final HttpParams httpParams = new BasicHttpParams();
-            HttpConnectionParams.setSoTimeout(httpParams,2000);
-
-
+            HttpConnectionParams.setSoTimeout(httpParams,HEALTH_CHECK_PERIOD);
             HttpClient client = new DefaultHttpClient(httpParams);
             String url = "http://" + instance.getPublicIpAddress() + ":8000/f.html?n=2";
             HttpGet request = new HttpGet(url);
@@ -203,14 +191,12 @@ public class EC2LBGeneralOperations {
 
             // While the response code is not 200 keep sending requests
             // This will ensure the web server is already running when we forward the request
-
             try {
                 response = client.execute(request);
                 statusCode = response.getStatusLine().getStatusCode();
-                System.out.println("Response: " + statusCode);
+                System.out.println("Responsed: " + statusCode);
             } catch (IOException e) {
                 System.out.println("New instance unreachable");
-
             }
             if(statusCode!=200){
                 instancesState.put(instance,"false");
